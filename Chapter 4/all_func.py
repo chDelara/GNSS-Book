@@ -10,18 +10,18 @@ import numpy as np
 from scipy.constants import c
 import time
 
-###input for transformation functions
-rwy30Start = np.array([[-2694685.473,-4293642.366,3857878.924]])
-rwy30End = np.array([[-2694892.460,-4293083.225,3858353.437]])
+# ###input for transformation functions
+# rwy30Start = np.array([[-2694685.473,-4293642.366,3857878.924]])
+# rwy30End = np.array([[-2694892.460,-4293083.225,3858353.437]])
 
-rcvr = pd.read_fwf(r'D:/Cholo/Self-Reading(Geodesy)/Books/GPSBookCD/Data/Original/rcvr.dat',header=None).dropna()
-# rcvr = pd.read_fwf(r'C:/Users/ASTI/Desktop/GNSS/GPSBookCD/Data/Original/rcvr.dat',header=None).dropna()
-rcvr.columns = ['time_week','SV','pseudorange','cycle','phase','slipdetect','snr']
+# rcvr = pd.read_fwf(r'D:/Cholo/Self-Reading(Geodesy)/Books/GPSBookCD/Data/Original/rcvr.dat',header=None).dropna()
+# # rcvr = pd.read_fwf(r'C:/Users/ASTI/Desktop/GNSS/GPSBookCD/Data/Original/rcvr.dat',header=None).dropna()
+# rcvr.columns = ['time_week','SV','pseudorange','cycle','phase','slipdetect','snr']
 
-eph = pd.read_fwf(r'D:/Cholo/Self-Reading(Geodesy)/Books/GPSBookCD/Data/Original/eph.dat',header=None).dropna()
-# eph = pd.read_fwf(r'C:/Users/ASTI/Desktop/GNSS/GPSBookCD/Data/Original/eph.dat',header=None).dropna()
-eph.columns = ['time_week','SV','toc','toe','af0','af1','af2','ura','e','sqrta','dn','m0',
-               'w','omg0','i0','odot','idot','cus','cuc','cis','cic','crs','crc','iod']
+# eph = pd.read_fwf(r'D:/Cholo/Self-Reading(Geodesy)/Books/GPSBookCD/Data/Original/eph.dat',header=None).dropna()
+# # eph = pd.read_fwf(r'C:/Users/ASTI/Desktop/GNSS/GPSBookCD/Data/Original/eph.dat',header=None).dropna()
+# eph.columns = ['time_week','SV','toc','toe','af0','af1','af2','ura','e','sqrta','dn','m0',
+#                'w','omg0','i0','odot','idot','cus','cuc','cis','cic','crs','crc','iod']
 
 def ell2cart(point):
     """
@@ -110,11 +110,15 @@ def calc_az_el(point):
     return np.array([[az],
                     [el]])
 
-def calcSatBias(rcvr_df,eph_df,SV):
+def calcSatBias(rcvr_df,eph_df,freq,SV):
 
     ### coordinates of SV
-    sv_n = rcvr_df[rcvr_df['SV'] == SV] 
-    t =  sv_n.time_week.values - sv_n.pseudorange.values/c
+    sv_n = rcvr_df[rcvr_df['SV'] == SV]
+    
+    try:
+        t =  sv_n.time_week.values - sv_n.pseudorange.values/c
+    except:
+        t = sv_n.rcvr_tow.values - sv_n[freq].values/c
     
     eph_n = eph_df[eph_df['SV'] == SV]
     
@@ -161,11 +165,15 @@ def calcSatBias(rcvr_df,eph_df,SV):
 
     return d_tsv
 
-def calcSatPos(rcvr_df,eph_df,SV):
+def calcSatPos(rcvr_df,eph_df,freq,SV):
 
     ### coordinates of SV
-    sv_n = rcvr_df[rcvr_df['SV'] == SV] 
-    t =  sv_n.time_week.values - sv_n.pseudorange.values/c - calcSatBias(rcvr_df,eph_df,SV)
+    sv_n = rcvr_df[rcvr_df['SV'] == SV]
+    
+    try:
+        t =  sv_n.time_week.values - sv_n.pseudorange.values/c - calcSatBias(rcvr_df,eph_df,freq,SV)
+    except:
+        t = sv_n.rcvr_tow.values - sv_n[freq].values/c - calcSatBias(rcvr_df,eph_df,freq,SV)
     
     eph_n = eph_df[eph_df['SV'] == SV]
     
