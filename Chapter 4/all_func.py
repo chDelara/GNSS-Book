@@ -110,10 +110,10 @@ def calc_az_el(point):
     return np.array([[az],
                     [el]])
 
-def calcSatBias(rcvr_df,eph_df,freq,SV):
+def calcSatBias(rcvr_df,eph_df,epoch,freq,SV):
 
     ### coordinates of SV
-    sv_n = rcvr_df[rcvr_df['SV'] == SV]
+    sv_n = rcvr_df[(rcvr_df['SV'] == SV) & (rcvr_df['GPS_date'] == epoch)]
     
     try:
         t =  sv_n.time_week.values - sv_n.pseudorange.values/c
@@ -121,6 +121,8 @@ def calcSatBias(rcvr_df,eph_df,freq,SV):
         t = sv_n.rcvr_tow.values - sv_n[freq].values/c
     
     eph_n = eph_df[eph_df['SV'] == SV]
+    epoch_idx = abs(eph_n.GPS_date - epoch).idxmin()
+    eph_n = eph_n.loc[epoch_idx:epoch_idx,:]
     
     ###coordinate calculation
     GM = 3986004.418e8 # Earth's gravitational constant
@@ -165,17 +167,19 @@ def calcSatBias(rcvr_df,eph_df,freq,SV):
 
     return d_tsv
 
-def calcSatPos(rcvr_df,eph_df,freq,SV):
+def calcSatPos(rcvr_df,eph_df,epoch,freq,SV):
 
     ### coordinates of SV
-    sv_n = rcvr_df[rcvr_df['SV'] == SV]
+    sv_n = rcvr_df[(rcvr_df['SV'] == SV) & (rcvr_df['GPS_date'] == epoch)]
     
     try:
         t =  sv_n.time_week.values - sv_n.pseudorange.values/c - calcSatBias(rcvr_df,eph_df,freq,SV)
     except:
-        t = sv_n.rcvr_tow.values - sv_n[freq].values/c - calcSatBias(rcvr_df,eph_df,freq,SV)
+        t = sv_n.rcvr_tow.values - sv_n[freq].values/c - calcSatBias(rcvr_df,eph_df,epoch,freq,SV)
     
     eph_n = eph_df[eph_df['SV'] == SV]
+    epoch_idx = abs(eph_n.GPS_date - epoch).idxmin()
+    eph_n = eph_n.loc[epoch_idx:epoch_idx,:]
     
     ###coordinate calculation
     GM = 3986004.418e8 # Earth's gravitational constant
