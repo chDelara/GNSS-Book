@@ -11,8 +11,10 @@ from datetime import datetime, timedelta
 import time
 import sys
 
-# sys.path.insert(0,r'D:/Cholo/Project/GNSS/Per Enge Book Codes/GNSS-Book/Chapter 4')
-sys.path.insert(0,r'C:\Users\ASTI\Desktop\GNSS\codes\GPS Book Homework\GNSS-Book\Chapter 4')
+import georinex as gr
+
+sys.path.insert(0,r'D:/Cholo/Project/GNSS/Per Enge Book Codes/GNSS-Book/Chapter 4')
+# sys.path.insert(0,r'C:\Users\ASTI\Desktop\GNSS\codes\GPS Book Homework\GNSS-Book\Chapter 4')
 from all_func import *
 
 gps_date_start = datetime(1980,1,6)
@@ -21,17 +23,23 @@ f2 = 1227.6 #MHz
 f5 = 1176. #MHz
 a = 6378137.0 # semi-major axis
 
+###for reading the ionospheric corrections only
+iono_corr = gr.load(r'D:/Cholo/Self-Reading(Geodesy)/Books/GPSBookCD/Data/Pigeon_Point/September_18_2000/pp091800.nav',use='G').ionospheric_corr_GPS
+# iono_corr = gr.load(r'C:/Users/ASTI/Desktop/GNSS/GPSBookCD/Data/Pigeon_Point/September_18_2000/pp091800.nav',use='G')
+
+# def klobuchar(iono_corr, user_loc, az, el, rcvr_time):
+
 ###user defined variable
-sv = 2
+sv = 5
 ref = np.array([[-2725252.3706,-4295978.5064,3833958.9487]])
 ref_ell = cart2ell(ref).T
 
-# rio = pd.read_fwf(r'D:/Cholo/Self-Reading(Geodesy)/Books/GPSBookCD/Data/Pigeon_Point/September_18_2000/Parsed/pp091800.rio',header=None)
-rio = pd.read_fwf(r'C:/Users/ASTI/Desktop/GNSS/GPSBookCD/Data/Pigeon_Point/September_18_2000/Parsed/pp091800.rio',header=None)
+rio = pd.read_fwf(r'D:/Cholo/Self-Reading(Geodesy)/Books/GPSBookCD/Data/Pigeon_Point/September_18_2000/Parsed/pp091800.rio',header=None)
+# rio = pd.read_fwf(r'C:/Users/ASTI/Desktop/GNSS/GPSBookCD/Data/Pigeon_Point/September_18_2000/Parsed/pp091800.rio',header=None)
 rio.columns = ["GPS_week","rcvr_tow","SV","C1","L1","L2","P1","P2","D1","D2"]
 
-# rin = pd.read_fwf(r'D:/Cholo/Self-Reading(Geodesy)/Books/GPSBookCD/Data/Pigeon_Point/September_18_2000/Parsed/pp091800.rin',header=None)
-rin = pd.read_fwf(r'C:/Users/ASTI/Desktop/GNSS/GPSBookCD/Data/Pigeon_Point/September_18_2000/Parsed/pp091800.rin',header=None)
+rin = pd.read_fwf(r'D:/Cholo/Self-Reading(Geodesy)/Books/GPSBookCD/Data/Pigeon_Point/September_18_2000/Parsed/pp091800.rin',header=None)
+# rin = pd.read_fwf(r'C:/Users/ASTI/Desktop/GNSS/GPSBookCD/Data/Pigeon_Point/September_18_2000/Parsed/pp091800.rin',header=None)
 rin.columns = ["SV","m0","dn","e","sqrta","omg0","i0","w","odot","idot","cuc","cus","crc","crs","cic","cis","toe","iode",
                "GPS_week","toc","af0","af1","af2","wdot"]
 
@@ -64,7 +72,7 @@ rio_svn = rio[rio.SV == sv].reset_index(drop=True)
 lat_list,lon_list, az_list, el_list = [], [], [], []
 for date in rio_svn['GPS_date']:
     print("GPS Time: ",date)
-    sat_pos = calcSatPos(rio,rin,date,"P1",3).T
+    sat_pos = calcSatPos(rio,rin,date,"P1",sv).T
     lat, lon, height = cart2ell(sat_pos).flatten()
     lat_list.append(lat)
     lon_list.append(lon)
@@ -95,16 +103,20 @@ plt.scatter(x=lon_list,y=lat_list)
 ###ref point coordinates
 x,y = ref_ell.flatten()[:2]
 plt.scatter(x=y,y=x,c='red')
+plt.title('Satellite Footprint')
 plt.show()
 
 ###plot elevation and azimuth angle over time
 fig1,ax1 = plt.subplots(nrows=2,figsize=(12,7),dpi=120,sharex=True)
 ax1[0].scatter(x=date_list,y=az_list)
+ax1[0].set_title('Satellite Azimuth vs Time')
+
 ax1[1].scatter(x=date_list,y=el_list,c="red")
+ax1[1].set_title('Satellite Elevation vs Time')
 plt.show()
 
 ###plot zenith delay over time
-fig,ax = plt.subplots(figsize=(12,7),dpi=120)
-ax.title('aw')
-ax.scatter(x=date_list,y=rio_svn.zen_delay)
+fig,ax2 = plt.subplots(figsize=(12,7),dpi=120)
+ax2.scatter(x=date_list,y=rio_svn.zen_delay)
+ax2.set_title('Zenith Ionospheric Delay Overtime')
 plt.show()
