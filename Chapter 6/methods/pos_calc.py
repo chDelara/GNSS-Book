@@ -99,7 +99,7 @@ def calc_az_el(point):
 def G_mat(init_x, G):
     x, y, z, b = init_x
     
-    d_arr = np.sqrt(np.sum(np.square(G - [x,y,z]),axis=1)[:,np.newaxis]) + b
+    d_arr = np.sqrt(np.sum(np.square(G - [x,y,z]),axis=1)[:,np.newaxis])
 
     G = -(G-[x,y,z])/d_arr
     G = np.append(G,np.ones(shape=(len(G),1)),axis=1)
@@ -108,7 +108,7 @@ def G_mat(init_x, G):
     
 
 def est_p(init_x,G):
-    return np.sqrt(np.sum(np.square(G - init_x[:-1]),axis=1)[:,np.newaxis]) + init_x[-1]
+    return np.sqrt(np.sum(np.square(G - init_x[:-1]),axis=1)[:,np.newaxis])
 
 def rot_satpos(sat_pos,pseudorange):
     omegadotE = 7292115.0e-11 # Earth's angular velocity

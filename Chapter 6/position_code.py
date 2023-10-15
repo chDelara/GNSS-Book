@@ -186,7 +186,7 @@ for sv in rcvr.SV.unique():
     sat_pos = calcSatPos(rcvr, eph, sv)
     p = rcvr[rcvr.SV == sv].pseudorange.values[:,np.newaxis] + calcSatBias(rcvr,eph,sv)*c
     
-    sat_pos = rot_satpos(sat_pos,p)
+    # sat_pos = rot_satpos(sat_pos,p)
     H = np.vstack((H,sat_pos.T))
     
     p_arr = np.append(p_arr,p,axis=0)

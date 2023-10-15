@@ -34,7 +34,8 @@ eph.columns = ['time_week','SV','toc','toe','af0','af1','af2','ura','e','sqrta',
                 'w','omg0','i0','odot','idot','cus','cuc','cis','cic','crs','crc','iod']
 
 
-init_x = np.append(rwy30Start,0)
+# init_x = np.append(rwy30Start,0)
+init_x = np.array([0,0,0,0])
 sample = rcvr.groupby("time_week")
 
 time_list, e_list, n_list, u_list, b_list = [], [], [], [], []
@@ -60,9 +61,10 @@ for rcvr_time, group in sample:
     x = init_x + delta_xb.flatten()
     
     counter = 0
-    while ((np.abs(delta_xb) > 1e-6).all()) & (counter == 1000):
-        delta_xb = la.inv(G_mat(x,H).T @ G_mat(x,H)) @ G_mat(x,H).T @ (p_arr - est_p(x,H))
+    while ((np.abs(delta_xb) > 1e-6).all()) & (counter <= 100):
+        delta_xb = la.inv(G_mat(x,H).T @ G_mat(x,H)) @ G_mat(x,H).T @ (p_arr - est_p(x,H) + init_x[-1] - x[-1])
         x = x + delta_xb.flatten()
+        counter += 1
     
     lat, lon, height = cart2ell(x[:-1]).flatten()    
     print(f"Latitude: {lat}, Longitude: {lon}, Ellipsoidal Height: {height}")
