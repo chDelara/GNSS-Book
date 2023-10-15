@@ -45,7 +45,7 @@ def G_mat(init_x, G):
     
 
 def est_p(init_x,G):
-    return np.sqrt(np.sum(np.square(H - init_x[:2]),axis=1)[:,np.newaxis]) + init_x[-1]
+    return np.sqrt(np.sum(np.square(G - init_x[:2]),axis=1)[:,np.newaxis]) + init_x[-1]
 
 delta_xb = la.inv(G_mat(init_x,H)) @ (p_arr - est_p(init_x,H))
 

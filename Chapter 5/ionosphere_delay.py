@@ -208,8 +208,8 @@ rio_svn['zen_delay'] = rio_svn['io_delay'] / rio_svn['OF']
 rio_svn['klobuchar'] = klob_list
 rio_svn['zen_delay2'] = rio_svn['klobuchar'] / rio_svn['OF']
 
-date_list = rio[rio.SV == sv]['GPS_date'].tolist()
 ###plot satellite position during GNSS measurement
+date_list = rio[rio.SV == sv]['GPS_date'].tolist()
 fig,ax = plt.subplots(figsize=(12,7),dpi=120)
 sc = ax.scatter(x=lon_list,y=lat_list,
                 c=[mdates.date2num(date) for date in date_list],
