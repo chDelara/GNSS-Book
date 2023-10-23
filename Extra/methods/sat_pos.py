@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Created on Sun Oct 15 15:29:16 2023
+Created on Tue Oct 17 23:13:29 2023
 
 @author: Cholo
 """
@@ -12,7 +12,7 @@ from scipy.constants import c
 def calcSatBias(rcvr_time,eph_df,SV):
     
     eph_n = eph_df[eph_df['SV'] == SV]
-    epoch_idx = abs(eph_n.time_week - rcvr_time).idxmin()
+    epoch_idx = abs(eph_n.toe - rcvr_time).idxmin()
     eph_n = eph_n.loc[epoch_idx:epoch_idx,:]
     
     ###coordinate calculation
@@ -54,16 +54,16 @@ def calcSatBias(rcvr_time,eph_df,SV):
     af1 = eph_n.af1.values
     af2 = eph_n.af2.values
 
-    d_tsv = af0 + af1*(rcvr_time - toc) + (af2*(rcvr_time - toc)**2) + tr
+    d_tsv = af0 + af1*(rcvr_time - toc) + (af2*(rcvr_time-toc)**2) + tr
 
     return d_tsv
 
 def calcSatPos(rcvr_time,pseudorange,eph_df,SV):
-
+    
     t =  rcvr_time - pseudorange/c
     
     eph_n = eph_df[eph_df['SV'] == SV]
-    epoch_idx = abs(eph_n.time_week - rcvr_time).idxmin()
+    epoch_idx = abs(eph_n.toe - rcvr_time).idxmin()
     eph_n = eph_n.loc[epoch_idx:epoch_idx,:]
     
     ###coordinate calculation
@@ -75,13 +75,13 @@ def calcSatPos(rcvr_time,pseudorange,eph_df,SV):
     n0 = np.sqrt(GM/a**3) #computed mean motion (rad/sec)
     
     tk = t - eph_n.toe.values #time from ephemeris reference epoch
-    
+  
     if tk >= 302400:
         tk -= 604800
         
     elif tk <= -302400:
         tk += 604800
-        
+    
     n = n0 + eph_n.dn.values #corrected mean motion
     Mk = eph_n.m0.values + n*tk #Mean anomaly
     
@@ -97,7 +97,7 @@ def calcSatPos(rcvr_time,pseudorange,eph_df,SV):
     
     vk = np.arctan2((np.sqrt(1 - np.square(e)) *  np.sin(Ek)), (np.cos(Ek) - e)  ) #true anomaly
 
-    phi_k = vk + eph_n.w.values #argument of latitude
+    phi_k = vk + eph_n.omega.values #argument of latitude
 
     cus = eph_n.cus.values
     cuc = eph_n.cuc.values

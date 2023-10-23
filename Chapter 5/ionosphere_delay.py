@@ -159,7 +159,7 @@ end = time.time()
 
 rin.insert(loc=0,column="GPS_date",value=gps_date_list)
 
-io_delay = ((f2**2) / ((f1**2) + (f2**2))) * (rio.P2 - rio.P1)
+io_delay = ((f2**2) / ((f1**2) - (f2**2))) * (rio.P2 - rio.P1)
 rio['io_delay'] = io_delay
 
 rio_svn = rio[rio.SV == sv].reset_index(drop=True)

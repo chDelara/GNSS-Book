@@ -21,15 +21,45 @@ rwy30Start = np.array([[-2694685.473,-4293642.366,3857878.924]])
 ref = np.array([[-2700400,-4292560.,3855270.]])
 ref_ell = cart2ell(ref).T
 
+###September 18, 2000
 rcvr = pd.read_csv(r'D:/Cholo/Self-Reading(Geodesy)/Books/GPSBookCD/Data/Stanford/September_18_2000/r091800a.dat',header=None,
-                   delim_whitespace=True).dropna()
+                    delim_whitespace=True).dropna()
+rcvr2 = pd.read_csv(r'D:/Cholo/Self-Reading(Geodesy)/Books/GPSBookCD/Data/Stanford/September_18_2000/r091800b.dat',header=None,
+                    delim_whitespace=True).dropna()
+rcvr3 = pd.read_csv(r'D:/Cholo/Self-Reading(Geodesy)/Books/GPSBookCD/Data/Stanford/September_18_2000/r091800c.dat',header=None,
+                    delim_whitespace=True).dropna()
+
+rcvr = pd.concat([rcvr,rcvr2,rcvr3],axis=0,ignore_index=True)
 # rcvr = pd.read_fwf(r'C:/Users/ASTI/Desktop/GNSS/GPSBookCD/Data/Stanford/September_18_2000/r091800a.dat',header=None,
 #                    delim_whitespace=True).dropna()
-rcvr.columns = ['time_week','SV','pseudorange','cycle','phase','slipdetect','snr']
 
 eph = pd.read_csv(r'D:/Cholo/Self-Reading(Geodesy)/Books/GPSBookCD/Data/Stanford/September_18_2000/e091800a.dat',header=None,
                   delim_whitespace=True).dropna()
 # eph = pd.read_fwf(r'C:/Users/ASTI/Desktop/GNSS/GPSBookCD/Data/Original/eph.dat',header=None).dropna()
+
+###January 6, 2000
+# rcvr = pd.read_csv(r'D:/Cholo/Self-Reading(Geodesy)/Books/GPSBookCD/Data/Stanford/January_6_2000/r010600a.dat',header=None,
+#                    delim_whitespace=True).dropna()
+# rcvr2 = pd.read_csv(r'D:/Cholo/Self-Reading(Geodesy)/Books/GPSBookCD/Data/Stanford/January_6_2000/r010600b.dat',header=None,
+#                    delim_whitespace=True).dropna()
+# rcvr3 = pd.read_csv(r'D:/Cholo/Self-Reading(Geodesy)/Books/GPSBookCD/Data/Stanford/January_6_2000/r010600c.dat',header=None,
+#                    delim_whitespace=True).dropna()
+
+# rcvr = pd.concat([rcvr,rcvr2,rcvr3],axis=0,ignore_index=True)
+# # rcvr = pd.read_fwf(r'C:/Users/ASTI/Desktop/GNSS/GPSBookCD/Data/Stanford/September_18_2000/r091800a.dat',header=None,
+# #                    delim_whitespace=True).dropna()
+
+# eph = pd.read_csv(r'D:/Cholo/Self-Reading(Geodesy)/Books/GPSBookCD/Data/Stanford/January_6_2000/e010600a.dat',header=None,
+#                   delim_whitespace=True).dropna()
+# eph2 = pd.read_csv(r'D:/Cholo/Self-Reading(Geodesy)/Books/GPSBookCD/Data/Stanford/January_6_2000/e010600b.dat',header=None,
+#                   delim_whitespace=True).dropna()
+# eph3 = pd.read_csv(r'D:/Cholo/Self-Reading(Geodesy)/Books/GPSBookCD/Data/Stanford/January_6_2000/e010600c.dat',header=None,
+#                   delim_whitespace=True).dropna()
+
+# eph = pd.concat([eph,eph2,eph3],axis=0,ignore_index=True)
+# eph = pd.read_fwf(r'C:/Users/ASTI/Desktop/GNSS/GPSBookCD/Data/Original/eph.dat',header=None).dropna()
+
+rcvr.columns = ['time_week','SV','pseudorange','cycle','phase','slipdetect','snr']
 eph.columns = ['time_week','SV','toc','toe','af0','af1','af2','ura','e','sqrta','dn','m0',
                 'w','omg0','i0','odot','idot','cus','cuc','cis','cic','crs','crc','iod']
 
@@ -38,7 +68,7 @@ eph.columns = ['time_week','SV','toc','toe','af0','af1','af2','ura','e','sqrta',
 init_x = np.array([0,0,0,0])
 sample = rcvr.groupby("time_week")
 
-time_list, e_list, n_list, u_list, b_list = [], [], [], [], []
+pos_list, time_list, e_list, n_list, u_list, b_list = [], [], [], [], [], []
 
 start = time.time()
 for rcvr_time, group in sample:
@@ -48,12 +78,13 @@ for rcvr_time, group in sample:
     p_arr = np.empty((0,1))
     
     for sv in group.SV.unique():
-        sat_pos = calcSatPos(group, eph, rcvr_time, sv)
-        p = group[group.SV == sv].pseudorange.values[:,np.newaxis] + (calcSatBias(group,eph,rcvr_time,sv) - init_x[-1]/c)*c
         
-        # sat_pos = rot_satpos(sat_pos,p)
+        p = group[group.SV == sv].pseudorange.values[:,np.newaxis] + (calcSatBias(rcvr_time,eph,sv) - init_x[-1]/c)*c
+        
+        sat_pos = calcSatPos(rcvr_time, p.flatten()[0], eph, sv)
+        sat_pos = rot_satpos(sat_pos,p)
+        
         H = np.vstack((H,sat_pos.T))
-        
         p_arr = np.append(p_arr,p,axis=0)
     
     x = init_x
@@ -73,13 +104,14 @@ for rcvr_time, group in sample:
     e, n, u = ecef2enu(ref,x[:3][np.newaxis,:]).flatten()
     b = x[-1]/c
     
+    pos_list.append([lat,lon,height])
     time_list.append(rcvr_time)
     e_list.append(e)
     n_list.append(n)
     u_list.append(u)
     b_list.append(b)
     
-    # init_x = x
+    init_x = x
 
 end = time.time()
 print(f"Runtime: {end-start} seconds")
