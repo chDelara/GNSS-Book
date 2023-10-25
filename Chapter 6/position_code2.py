@@ -22,20 +22,25 @@ ref = np.array([[-2700400,-4292560.,3855270.]])
 ref_ell = cart2ell(ref).T
 
 ###September 18, 2000
-rcvr = pd.read_csv(r'D:/Cholo/Self-Reading(Geodesy)/Books/GPSBookCD/Data/Stanford/September_18_2000/r091800a.dat',header=None,
-                    delim_whitespace=True).dropna()
-rcvr2 = pd.read_csv(r'D:/Cholo/Self-Reading(Geodesy)/Books/GPSBookCD/Data/Stanford/September_18_2000/r091800b.dat',header=None,
-                    delim_whitespace=True).dropna()
-rcvr3 = pd.read_csv(r'D:/Cholo/Self-Reading(Geodesy)/Books/GPSBookCD/Data/Stanford/September_18_2000/r091800c.dat',header=None,
-                    delim_whitespace=True).dropna()
+# rcvr = pd.read_csv(r'D:/Cholo/Self-Reading(Geodesy)/Books/GPSBookCD/Data/Stanford/September_18_2000/r091800a.dat',header=None,
+#                     delim_whitespace=True).dropna()
+# rcvr2 = pd.read_csv(r'D:/Cholo/Self-Reading(Geodesy)/Books/GPSBookCD/Data/Stanford/September_18_2000/r091800b.dat',header=None,
+#                     delim_whitespace=True).dropna()
+# rcvr3 = pd.read_csv(r'D:/Cholo/Self-Reading(Geodesy)/Books/GPSBookCD/Data/Stanford/September_18_2000/r091800c.dat',header=None,
+#                     delim_whitespace=True).dropna()
 
+rcvr = pd.read_csv(r'C:/Users/ASTI/Desktop/GNSS/GPSBookCD/Data/Stanford/September_18_2000/r091800a.dat',header=None,
+                    delim_whitespace=True).dropna()
+rcvr2 = pd.read_csv(r'C:/Users/ASTI/Desktop/GNSS/GPSBookCD/Data/Stanford/September_18_2000/r091800b.dat',header=None,
+                    delim_whitespace=True).dropna()
+rcvr3 = pd.read_csv(r'C:/Users/ASTI/Desktop/GNSS/GPSBookCD/Data/Stanford/September_18_2000/r091800c.dat',header=None,
+                    delim_whitespace=True).dropna()
 rcvr = pd.concat([rcvr,rcvr2,rcvr3],axis=0,ignore_index=True)
-# rcvr = pd.read_fwf(r'C:/Users/ASTI/Desktop/GNSS/GPSBookCD/Data/Stanford/September_18_2000/r091800a.dat',header=None,
-#                    delim_whitespace=True).dropna()
 
-eph = pd.read_csv(r'D:/Cholo/Self-Reading(Geodesy)/Books/GPSBookCD/Data/Stanford/September_18_2000/e091800a.dat',header=None,
+# eph = pd.read_csv(r'D:/Cholo/Self-Reading(Geodesy)/Books/GPSBookCD/Data/Stanford/September_18_2000/e091800a.dat',header=None,
+#                   delim_whitespace=True).dropna()
+eph = pd.read_csv(r'C:/Users/ASTI/Desktop/GNSS/GPSBookCD/Data/Stanford/September_18_2000/e091800a.dat',header=None,
                   delim_whitespace=True).dropna()
-# eph = pd.read_fwf(r'C:/Users/ASTI/Desktop/GNSS/GPSBookCD/Data/Original/eph.dat',header=None).dropna()
 
 ###January 6, 2000
 # rcvr = pd.read_csv(r'D:/Cholo/Self-Reading(Geodesy)/Books/GPSBookCD/Data/Stanford/January_6_2000/r010600a.dat',header=None,
@@ -79,7 +84,7 @@ for rcvr_time, group in sample:
     
     for sv in group.SV.unique():
         
-        p = group[group.SV == sv].pseudorange.values[:,np.newaxis] + (calcSatBias(rcvr_time,eph,sv) - init_x[-1]/c)*c
+        p = group[group.SV == sv].pseudorange.values[:,np.newaxis] + (calcSatBias(rcvr_time,eph,sv)*c) - init_x[-1]
         
         sat_pos = calcSatPos(rcvr_time, p.flatten()[0], eph, sv)
         sat_pos = rot_satpos(sat_pos,p)
