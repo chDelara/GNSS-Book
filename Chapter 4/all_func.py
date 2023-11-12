@@ -15,13 +15,13 @@ import time
 # rwy30End = np.array([[-2694892.460,-4293083.225,3858353.437]])
 
 # rcvr = pd.read_fwf(r'D:/Cholo/Self-Reading(Geodesy)/Books/GPSBookCD/Data/Original/rcvr.dat',header=None).dropna()
-# # rcvr = pd.read_fwf(r'C:/Users/ASTI/Desktop/GNSS/GPSBookCD/Data/Original/rcvr.dat',header=None).dropna()
-# rcvr.columns = ['time_week','SV','pseudorange','cycle','phase','slipdetect','snr']
+rcvr = pd.read_fwf(r'C:/Users/ASTI/Desktop/GNSS/GPSBookCD/Data/Original/rcvr.dat',header=None).dropna()
+rcvr.columns = ['time_week','SV','pseudorange','cycle','phase','slipdetect','snr']
 
 # eph = pd.read_fwf(r'D:/Cholo/Self-Reading(Geodesy)/Books/GPSBookCD/Data/Original/eph.dat',header=None).dropna()
-# # eph = pd.read_fwf(r'C:/Users/ASTI/Desktop/GNSS/GPSBookCD/Data/Original/eph.dat',header=None).dropna()
-# eph.columns = ['time_week','SV','toc','toe','af0','af1','af2','ura','e','sqrta','dn','m0',
-#                'w','omg0','i0','odot','idot','cus','cuc','cis','cic','crs','crc','iod']
+eph = pd.read_fwf(r'C:/Users/ASTI/Desktop/GNSS/GPSBookCD/Data/Original/eph.dat',header=None).dropna()
+eph.columns = ['time_week','SV','toc','toe','af0','af1','af2','ura','e','sqrta','dn','m0',
+                'w','omg0','i0','odot','idot','cus','cuc','cis','cic','crs','crc','iod']
 
 def ell2cart(point):
     """

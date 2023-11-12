@@ -23,11 +23,11 @@ f5 = 1176. #MHz
 # obs = gr.load(r'D:/Cholo/UP/5th Year - 1st Sem - BS Geodetic Engineering/GE 155.1/GNSS/Day 1/Molave/Molave/IGS000USA_R_20193020215_00M_01S_MO.rnx',use="G").to_dataframe().reset_index(drop=False)
 # nav = gr.load(r'D:/Cholo/UP/5th Year - 1st Sem - BS Geodetic Engineering/GE 155.1/GNSS/Day 1/Molave/Molave/IGS000USA_R_20193020215_00M_01S_MN.rnx',use="G")
 
-# obs = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/IGS000USA_R_20193020215_00M_01S_MO.rnx',use="G").to_dataframe().reset_index(drop=False)
-# nav = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/IGS000USA_R_20193020215_00M_01S_MN.rnx',use="G")
+obs = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/IGS000USA_R_20193020215_00M_01S_MO.rnx',use="G").to_dataframe().reset_index(drop=False)
+nav = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/IGS000USA_R_20193020215_00M_01S_MN.rnx',use="G")
 
-obs = gr.load(r'C:/Users/ASTI/Desktop/GNSS/PTAG00PHL_R_20230180100_01H_30S_MO.crx',use="G").to_dataframe().reset_index(drop=False)
-nav = gr.load(r'C:/Users/ASTI/Desktop/GNSS/PTAG00PHL_R_20230180000_01H_GN.rnx',use="G")
+# obs = gr.load(r'C:/Users/ASTI/Desktop/GNSS/PTAG00PHL_R_20230180100_01H_30S_MO.crx',use="G").to_dataframe().reset_index(drop=False)
+# nav = gr.load(r'C:/Users/ASTI/Desktop/GNSS/PTAG00PHL_R_20230180000_01H_GN.rnx',use="G")
 
 iono_corr = nav.ionospheric_corr_GPS
 nav = nav.to_dataframe().reset_index(drop=False)
@@ -51,8 +51,8 @@ nav = nav[['epoch','SV','toc','toe','af0','af1','af2','e','sqrta','dn','m0',
 
 
 
-# ref = ell2cart(np.array([14.6575984,121.0673426,116.7935])).T
-ref = (np.array([-3184320.9618,5291067.5908,1590413.9800])[np.newaxis,:])
+ref = ell2cart(np.array([14.6575984,121.0673426,116.7935])).T
+# ref = (np.array([-3184320.9618,5291067.5908,1590413.9800])[np.newaxis,:])
 init_x = np.array([0,0,0,0])
 sample = obs.groupby(time_week)
 

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Created on Wed Oct 25 15:22:45 2023
+Created on Thu Oct 26 16:33:27 2023
 
 @author: ASTI
 """
@@ -15,9 +15,69 @@ from methods.localization import *
 from datetime import datetime,timedelta
 import time
 
-def calc_rcvr_pos(rcvr_time,group,x0,count):
-    init_x = x0
-        
+gps_date_start = datetime(1980,1,6)
+f1 = 1575.42 #MHz
+f2 = 1227.6 #MHz
+f5 = 1176. #MHz
+
+# obs = gr.load(r'D:/Cholo/UP/5th Year - 1st Sem - BS Geodetic Engineering/GE 155.1/GNSS/Day 1/Molave/Molave/IGS000USA_R_20193020215_00M_01S_MO.rnx',use="G").to_dataframe().reset_index(drop=False)
+# nav = gr.load(r'D:/Cholo/UP/5th Year - 1st Sem - BS Geodetic Engineering/GE 155.1/GNSS/Day 1/Molave/Molave/IGS000USA_R_20193020215_00M_01S_MN.rnx',use="G")
+
+###Molave
+# obs = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/IGS000USA_R_20193020215_00M_01S_MO.rnx',use="G").to_dataframe().reset_index(drop=False)
+# nav = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/IGS000USA_R_20193020215_00M_01S_MN.rnx',use="G")
+
+###Freshie Walk
+# obs = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/Freshie/IGS000USA_R_20193010216_24H_15S_MO.rnx',use="G").to_dataframe().reset_index(drop=False)
+# nav = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/Freshie/IGS000USA_R_20193010216_24H_15S_MN.rnx',use="G")
+
+###CMC Hill
+obs = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/CMC_Hill/IGS000USA_R_20193250055_00M_01S_MO.rnx',use="G").to_dataframe().reset_index(drop=False)
+nav = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/CMC_Hill/IGS000USA_R_20193250055_00M_01S_MN.rnx',use="G")
+
+###PTAG IGS
+# obs = gr.load(r'C:/Users/ASTI/Desktop/GNSS/PTAG00PHL_R_20230180100_01H_30S_MO.crx',use="G").to_dataframe().reset_index(drop=False)
+# nav = gr.load(r'C:/Users/ASTI/Desktop/GNSS/PTAG00PHL_R_20230180000_01H_GN.rnx',use="G")
+
+iono_corr = nav.ionospheric_corr_GPS
+nav = nav.to_dataframe().reset_index(drop=False)
+
+obs_columns = obs.columns.tolist()
+obs_columns[:2] = ['SV','epoch']
+obs.columns = obs_columns
+
+days_epoch = (((obs.epoch - timedelta(hours=8)).values.astype(np.int64) // 10 ** 9) - datetime.timestamp(gps_date_start)) / (3600*24)
+GPS_week = days_epoch//7
+time_week = (days_epoch/7  % 1) * (3600*24*7)
+obs['GPS_week'] = GPS_week
+obs['time_week'] = time_week
+
+
+
+nav.columns = ['epoch','SV','af0','af1','af2','iode','crs','dn','m0','cuc','e','cus','sqrta','toe','cic','omg0',
+               'cis','i0','crc','omega','odot','idot','CodesL2','GPSWeek','L2Pflag','SVacc','health','TGD','IODC','toc']
+nav = nav[['epoch','SV','toc','toe','af0','af1','af2','e','sqrta','dn','m0',
+                'omega','omg0','i0','odot','idot','cus','cuc','cis','cic','crs','crc','IODC']]
+
+
+### Molave Ref
+# ref = ell2cart(np.array([14.6575984,121.0673426,116.7935])).T
+
+### Freshie Walk Ref
+# ref = ell2cart(np.array([14.653947053,121.068636975,110.])).T
+
+### CMC Hill Ref
+ref = ell2cart(np.array([14.65530195,121.0638391,104.4737])).T
+# ref = (np.array([-3184320.9618,5291067.5908,1590413.9800])[np.newaxis,:])
+init_x = np.array([0,0,0,0])
+sample = obs.groupby(time_week)
+
+pos_list, time_list, e_list, n_list, u_list, b_list = [], [], [], [], [], []
+
+start = time.time()
+count = 0
+for rcvr_time, group in sample:
+    
     print(f"Epoch: {rcvr_time}")
     
     while True:
@@ -47,7 +107,7 @@ def calc_rcvr_pos(rcvr_time,group,x0,count):
                     p_arr = np.append(p_arr,p,axis=0)
         
         if len(H) < 4:
-            raise Exception("Less than 4 satellites in view")
+            break
         else:
             pass
         
@@ -66,84 +126,16 @@ def calc_rcvr_pos(rcvr_time,group,x0,count):
             
         else:
             init_x = x
+            count += 1
             break
     
-    return init_x
     
-    
-
-gps_date_start = datetime(1980,1,6)
-f1 = 1575.42 #MHz
-f2 = 1227.6 #MHz
-f5 = 1176. #MHz
-
-# obs = gr.load(r'D:/Cholo/UP/5th Year - 1st Sem - BS Geodetic Engineering/GE 155.1/GNSS/Day 1/Molave/Molave/IGS000USA_R_20193020215_00M_01S_MO.rnx',use="G").to_dataframe().reset_index(drop=False)
-# nav = gr.load(r'D:/Cholo/UP/5th Year - 1st Sem - BS Geodetic Engineering/GE 155.1/GNSS/Day 1/Molave/Molave/IGS000USA_R_20193020215_00M_01S_MN.rnx',use="G")
-
-###Molave
-obs = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/Molave/IGS000USA_R_20193020215_00M_01S_MO.rnx',use="G").to_dataframe().reset_index(drop=False)
-nav = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/Molave/IGS000USA_R_20193020215_00M_01S_MN.rnx',use="G")
-
-###Freshie Walk
-# obs = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/Freshie/IGS000USA_R_20193010216_24H_15S_MO.rnx',use="G").to_dataframe().reset_index(drop=False)
-# nav = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/Freshie/IGS000USA_R_20193010216_24H_15S_MN.rnx',use="G")
-
-###CMC Hill
-# obs = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/CMC_Hill/IGS000USA_R_20193250055_00M_01S_MO.rnx',use="G").to_dataframe().reset_index(drop=False)
-# nav = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/CMC_Hill/IGS000USA_R_20193250055_00M_01S_MN.rnx',use="G")
-
-###PTAG IGS
-# obs = gr.load(r'C:/Users/ASTI/Desktop/GNSS/PTAG00PHL_R_20230180100_01H_30S_MO.crx',use="G").to_dataframe().reset_index(drop=False)
-# nav = gr.load(r'C:/Users/ASTI/Desktop/GNSS/PTAG00PHL_R_20230180000_01H_GN.rnx',use="G")
-
-iono_corr = nav.ionospheric_corr_GPS
-nav = nav.to_dataframe().reset_index(drop=False)
-
-obs_columns = obs.columns.tolist()
-obs_columns[:2] = ['SV','epoch']
-obs.columns = obs_columns
-
-days_epoch = (((obs.epoch - timedelta(hours=8)).values.astype(np.int64) // 10 ** 9) - datetime.timestamp(gps_date_start)) / (3600*24)
-GPS_week = days_epoch//7
-time_week = (days_epoch/7  % 1) * (3600*24*7)
-obs['GPS_week'] = GPS_week
-obs['time_week'] = time_week
-
-
-
-nav.columns = ['epoch','SV','af0','af1','af2','iode','crs','dn','m0','cuc','e','cus','sqrta','toe','cic','omg0',
-               'cis','i0','crc','omega','odot','idot','CodesL2','GPSWeek','L2Pflag','SVacc','health','TGD','IODC','toc']
-nav = nav[['epoch','SV','toc','toe','af0','af1','af2','e','sqrta','dn','m0',
-                'omega','omg0','i0','odot','idot','cus','cuc','cis','cic','crs','crc','IODC']]
-
-### Molave Ref
-ref = ell2cart(np.array([14.6575984,121.0673426,116.7935])).T
-
-### Freshie Walk Ref
-# ref = ell2cart(np.array([14.653947053,121.068636975,110.])).T
-
-### CMC Hill Ref
-# ref = ell2cart(np.array([14.65530195,121.0638391,104.4737])).T
-
-#initial position estimate
-init_x = np.array([0,0,0,0])
-
-start = time.time()
-count = 0
-
-sample = obs.groupby(time_week)
-
-pos_list, time_list, e_list, n_list, u_list, b_list = [], [], [], [], [], []
-
-for rcvr_time, group in sample:
-    init_x = calc_rcvr_pos(rcvr_time,group,init_x, count)
-    
-    lat, lon, height = cart2ell(init_x[:-1]).flatten()
+    lat, lon, height = cart2ell(x[:-1]).flatten()
     print(f"Latitude: {lat}, Longitude: {lon}, Ellipsoidal Height: {height}")
-    print(f"Receiver Clock Bias: {init_x[-1]/c} s\n")
+    print(f"Receiver Clock Bias: {x[-1]/c} s\n")
     
-    e, n, u = ecef2enu(ref,init_x[:3][np.newaxis,:]).flatten()
-    b = init_x[-1]/c
+    e, n, u = ecef2enu(ref,x[:3][np.newaxis,:]).flatten()
+    b = x[-1]/c
     
     pos_list.append([lat,lon,height])
     time_list.append(rcvr_time)
@@ -153,6 +145,7 @@ for rcvr_time, group in sample:
     b_list.append(b)
     
     count += 1
+    init_x = x
 
 end = time.time()
 print(f"Runtime: {end-start} seconds")
@@ -163,11 +156,6 @@ e_list2 = np.array(e_list)[condition]
 n_list2 = np.array(n_list)[condition]
 u_list2 = np.array(u_list)[condition]
 b_list2 = np.array(b_list)[condition]
-
-e_list2 = e_list2 - e_list2.mean()
-n_list2 = n_list2 - n_list2.mean()
-u_list2 = u_list2 - u_list2.mean()
-b_list2 = b_list2 - b_list2.mean()
 
 ###plot satellite position during GNSS measurement
 fig,ax = plt.subplots(figsize=(12,7),dpi=120)

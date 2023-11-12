@@ -10,12 +10,14 @@ import numpy as np
 from scipy.constants import c
 import time
 
-rcvr = pd.read_fwf(r'D:/Cholo/Self-Reading(Geodesy)/Books/GPSBookCD/Data/Original/rcvr.dat',header=None).dropna()
+# rcvr = pd.read_fwf(r'D:/Cholo/Self-Reading(Geodesy)/Books/GPSBookCD/Data/Original/rcvr.dat',header=None).dropna()
+rcvr = pd.read_fwf(r'C:/Users/ASTI/Desktop/GNSS/GPSBookCD/Data/Original/rcvr.dat',header=None).dropna()
 rcvr.columns = ['time_week','SV','pseudorange','cycle','phase','slipdetect','snr']
 
-eph = pd.read_fwf(r'D:/Cholo/Self-Reading(Geodesy)/Books/GPSBookCD/Data/Original/eph.dat',header=None).dropna()
+# eph = pd.read_fwf(r'D:/Cholo/Self-Reading(Geodesy)/Books/GPSBookCD/Data/Original/eph.dat',header=None).dropna()
+eph = pd.read_fwf(r'C:/Users/ASTI/Desktop/GNSS/GPSBookCD/Data/Original/eph.dat',header=None).dropna()
 eph.columns = ['time_week','SV','toc','toe','af0','af1','af2','ura','e','sqrta','dn','m0',
-               'w','omg0','i0','odot','idot','cus','cuc','cis','cic','crs','crc','iod']
+                'w','omg0','i0','odot','idot','cus','cuc','cis','cic','crs','crc','iod']
 
 ### coordinates of SV6
 sv6 = rcvr[rcvr['SV'] == 6.] 
@@ -25,7 +27,7 @@ eph6 = eph[eph['SV'] == 6.]
 
 ###coordinate calculation
 GM = 3986004.418e8 # Earth's gravitational constant
-omegadotE = 7292115.0e-11 # Earth's angular velocity
+omegadotE = 7292115e-11 # Earth's angular velocity
 
 a = eph6.sqrta.values**2 #semi-major axis
 n0 = np.sqrt(GM/a**3) #computed mean motion (rad/sec)
@@ -46,10 +48,12 @@ Ek = Mk
 f = Mk - (Ek - eph6.e.values*np.sin(Ek))
 f_prime = eph6.e.values*np.cos(Ek) - 1 
 
+counter = 0
 while abs(f/f_prime) >= 1e-8:
     Ek = Ek - f/f_prime
     f = Mk - (Ek - eph6.e.values*np.sin(Ek))
     f_prime = eph6.e.values*np.cos(Ek) - 1
+    counter += 1
     
 vk = np.arctan2((np.sqrt(1 - np.square(eph6.e.values)) *  np.sin(Ek)), (np.cos(Ek) - eph6.e.values)  ) #true anomaly
 
