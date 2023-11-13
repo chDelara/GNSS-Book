@@ -69,20 +69,61 @@ def calc_rcvr_pos(rcvr_time,group,x0,count):
             break
     
     return init_x
+   
+ 
+"""
+for rcrv_time, group in sample:
+    print(f"Epoch: {rcvr_time}")
     
+    sv = group[group['SV'] == 'G02']
+    cp = sv.L1C
+    pr = sv.C1C
     
+    NL1 = cp - (pr * (f1*1e6/c))
+    print(f"NL1: {NL1}")
+    time.sleep(1)
+
+#Wide Lane measurements
+for rcrv_time, group in sample:
+    print(f"Epoch: {rcvr_time}")
+
+    l_12 = c/((f1-f2) * 1e6)
+    sv = group[group['SV'] == 'G02']
+    cp1 = sv.L1C
+    cp2 = sv.L2W
+    pr = sv.C1C
+
+    NL12 = cp1 - cp2 - (pr / l_12)
+    print(f"NL12: {NL12}")
+    time.sleep(1)
+    
+#Narrow Lane measurements
+for rcrv_time, group in sample:
+    print(f"Epoch: {rcvr_time}")
+
+    l_12 = c/((f1+f2) * 1e6)
+    sv = group[group['SV'] == 'G02']
+    cp1 = sv.L1C
+    cp2 = sv.L2W
+    pr = sv.C1C
+
+    NL12 = cp1 + cp2 - (pr / l_12)
+    print(f"NL12: {NL12}")
+    time.sleep(1)
+"""
+
 
 gps_date_start = datetime(1980,1,6)
 f1 = 1575.42 #MHz
 f2 = 1227.6 #MHz
 f5 = 1176. #MHz
 
-# obs = gr.load(r'D:/Cholo/UP/5th Year - 1st Sem - BS Geodetic Engineering/GE 155.1/GNSS/Day 1/Molave/Molave/IGS000USA_R_20193020215_00M_01S_MO.rnx',use="G").to_dataframe().reset_index(drop=False)
-# nav = gr.load(r'D:/Cholo/UP/5th Year - 1st Sem - BS Geodetic Engineering/GE 155.1/GNSS/Day 1/Molave/Molave/IGS000USA_R_20193020215_00M_01S_MN.rnx',use="G")
+obs = gr.load(r'D:/Cholo/UP/5th Year - 1st Sem - BS Geodetic Engineering/GE 155.1/GNSS/Day 1/Molave/Molave/IGS000USA_R_20193020215_00M_01S_MO.rnx',use="G").to_dataframe().reset_index(drop=False)
+nav = gr.load(r'D:/Cholo/UP/5th Year - 1st Sem - BS Geodetic Engineering/GE 155.1/GNSS/Day 1/Molave/Molave/IGS000USA_R_20193020215_00M_01S_MN.rnx',use="G")
 
 ###Molave
-obs = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/Molave/IGS000USA_R_20193020215_00M_01S_MO.rnx',use="G").to_dataframe().reset_index(drop=False)
-nav = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/Molave/IGS000USA_R_20193020215_00M_01S_MN.rnx',use="G")
+# obs = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/Molave/IGS000USA_R_20193020215_00M_01S_MO.rnx',use="G").to_dataframe().reset_index(drop=False)
+# nav = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/Molave/IGS000USA_R_20193020215_00M_01S_MN.rnx',use="G")
 
 ###Freshie Walk
 # obs = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/Freshie/IGS000USA_R_20193010216_24H_15S_MO.rnx',use="G").to_dataframe().reset_index(drop=False)
