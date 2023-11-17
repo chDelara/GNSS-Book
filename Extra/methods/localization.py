@@ -96,6 +96,83 @@ def calc_az_el(point):
     return np.array([[az],
                     [el]])
 
+def klobuchar(iono_corr, user_loc, az, el, rcvr_time):
+    ### https://gssc.esa.int/navipedia/index.php/Klobuchar_Ionospheric_Model
+    
+    # satellite transmitted ionospheric correction coefficients
+    alpha_n = iono_corr[:4]
+    beta_n = iono_corr[4:]
+    
+    lat, lon, height = user_loc.flatten()
+    az = np.radians(az)
+    el = np.radians(el)
+    
+    # Calculation of the earth-centered angle
+    phi = (0.0137 / (el + 0.11)) - 0.022
+    
+    # Computation of the latitude of the ionospheric piercing point (IPP)
+    lat_I = lat + phi * np.cos(az)
+    
+    if lat_I > 0.416:
+        lat_I = 0.416
+    elif lat_I < -0.416:
+        lat_I = -0.416
+    else:
+        pass
+    
+    # Compute the longitude of the ionospheric piercing point (IPP)
+    lon_I = lon + (phi * np.sin(az)/np.cos(lat_I))
+    
+    # find the geomagnetic latitude of the ionospheric piercing point (IPP)
+    phi_m = lat_I + (0.064*np.cos(lon_I - 1.617))
+    
+    # find the local time at IPP
+    t = (43200 * lon_I) + rcvr_time
+    
+    if t >= 86400:
+        t -= 86400
+    elif t < 0:
+        t += 86400
+    else:
+        pass
+    
+    # computation of the amplitude of ionospheric delay
+    A_I = 0
+    
+    for counter in range(4):
+        A_I += alpha_n[counter] * phi_m**counter
+    
+    if A_I < 0:
+        A_I = 0
+    else:
+        pass
+    
+    # computation of the period of ionospheric delay
+    P_I = 0
+    
+    for counter in range(4):
+        P_I += beta_n[counter] * phi_m**counter
+        
+    if P_I < 72000:
+        P_I = 72000
+    else:
+        pass
+    
+    # computation of the phase of ionospheric delay
+    X_I = 2*np.pi * (t - 50400) / P_I
+    
+    # computation of the slant factor
+    F = 1.0 + (16.0 * (0.53 - el)**3)
+    
+    I_Ln = 0
+    
+    if abs(X_I) <= 1.57:
+        I_Ln = (5e-9 + (A_I * (1 - ((X_I**2)/2) + ((X_I**4)/24)))) * F
+    else:
+        I_Ln = 5e-9 * F
+    
+    return I_Ln
+
 def G_mat(init_x, G):
     x, y, z, b = init_x
     
@@ -111,7 +188,7 @@ def est_p(init_x,G):
     return np.sqrt(np.sum(np.square(G - init_x[:-1]),axis=1)[:,np.newaxis])
 
 def rot_satpos(sat_pos,pseudorange):
-    omegadotE = 7292115.0e-11 # Earth's angular velocity
+    omegadotE = 7292115.1467e-11 # Earth's angular velocity
     
     pseudorange = pseudorange.flatten()[0]
     rot_mat = np.array([[np.cos(omegadotE * pseudorange/c), np.sin(omegadotE * pseudorange/c), 0],

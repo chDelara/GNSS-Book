@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Created on Wed Oct 25 15:22:45 2023
+Created on Tue Nov 14 15:01:15 2023
 
 @author: ASTI
 """
@@ -15,7 +15,7 @@ from methods.localization import *
 from datetime import datetime,timedelta
 import time
 
-def calc_rcvr_pos(rcvr_time,group,x0,count):
+def calc_rcvr_pos(rcvr_time,nav,group,x0,count):
     init_x = x0
         
     print(f"Epoch: {rcvr_time}")
@@ -23,14 +23,30 @@ def calc_rcvr_pos(rcvr_time,group,x0,count):
     while True:
         H = np.empty((0,3))
         p_arr = np.empty((0,1))
-        group = group.dropna(subset=['C1C','C2W'])
+        group = group.dropna(subset=['C1C','C2W','L1C','L2W'])
         
         for sv in group.SV.unique():
             group_sub = group[group.SV == sv]
             # pseudorange = (((f1**2) / ((f1**2) - (f2**2))) * group_sub.C1C) - (((f2**2) / ((f1**2) - (f2**2))) * group_sub.C2W)
             
-            pseudorange = group_sub.C2W
-            p = pseudorange.values[:,np.newaxis] + (calcSatBias(rcvr_time,nav,sv) - init_x[-1]/c)*c
+            ###pseudoranges
+            pseudorange1 = group_sub.C1C
+            p1 = pseudorange1.values[:,np.newaxis] + (calcSatBias(rcvr_time,nav,sv) - init_x[-1]/c)*c
+            
+            pseudorange2 = group_sub.C2W
+            p2 = pseudorange2.values[:,np.newaxis] + (calcSatBias(rcvr_time,nav,sv) - init_x[-1]/c)*c
+            
+            ###carrier phase measurements
+            carrier1 = group_sub.L1C
+            cp1 = carrier1.values[:,np.newaxis] * c/(f1*1e6) + (calcSatBias(rcvr_time,nav,sv) - init_x[-1]/c)*c
+            
+            carrier2 = group_sub.L2W
+            cp2 = carrier2.values[:,np.newaxis] * c/(f2*1e6) + (calcSatBias(rcvr_time,nav,sv) - init_x[-1]/c)*c
+            
+            f_arr = np.vstack([p1,p2,cp1,cp2])
+            
+            p, iono_delay, N1, N2 = dualF_eq(f_arr,f1,f2)
+            p = p[:,np.newaxis]
             
             sat_pos = calcSatPos(rcvr_time, p.flatten()[0], nav, sv)
             sat_pos = rot_satpos(sat_pos,p)
@@ -74,13 +90,98 @@ def calc_rcvr_pos(rcvr_time,group,x0,count):
 
 def est_pIF(prange_arr,f1,f2):
     
-    G_mat = np.array([[1,1],
-                      [1,(f1**2)/(f2**2)],
-                      []])
+    g_mat = np.array([[1,1],
+                      [1,(f1**2)/(f2**2)]])
     
-    pIF = la.inv(G_mat.T @ G_mat) @ G_mat.T @ prange_arr
+    pIF = la.inv(g_mat.T @ g_mat) @ g_mat.T @ prange_arr
     
     return pIF
+
+def dualF_eq(f_arr,f1,f2):
+    
+    g_mat = np.array([[1,1,0,0],
+                      [1,(f1**2)/(f2**2),0,0],
+                      [1,-1,1,0],
+                      [1,-(f1**2)/(f2**2),0,1]])
+    
+    pIF = la.inv(g_mat.T @ g_mat) @ g_mat.T @ f_arr
+    
+    return pIF
+
+    
+def calc_cp_pos(rcvr_time,nav,group,x0,count):
+    init_x = x0
+    
+    print(f"Epoch: {rcvr_time}")
+    
+    while True:
+        H = np.empty((0,3))
+        p_arr = np.empty((0,1))
+        group = group.dropna(subset=['C1C','C2W','L1C','L2W'])
+        
+        for sv in group.SV.unique():
+            group_sub = group[group.SV == sv]
+            
+            pseudorange = group_sub.C1C
+            p = pseudorange.values[:,np.newaxis]
+            
+            ### Carrier Phases Measurements
+            carrier1 = group_sub.L1C
+            cp1 = carrier1.values[:,np.newaxis]
+            
+            carrier2 = group_sub.L2W
+            cp2 = carrier2.values[:,np.newaxis]
+            
+            NL12 = cp1 - cp2 - (p / l_12)
+            
+            N1 = np.around(((l2/l1)**-1) * ( (l2/l1)*NL12 - cp1 + (l2/l1)*cp2)).astype(int)
+            N2 = N1 - NL12
+            
+            cp11 = (cp1 - N1)*l1 + (calcSatBias(rcvr_time,nav,sv)*c) - init_x[-1]
+            cp22 = (cp2 - N2)*l2 + (calcSatBias(rcvr_time,nav,sv)*c) - init_x[-1]
+            
+            cp = (((f1**2) / ((f1**2) - (f2**2))) * cp11) - (((f2**2) / ((f1**2) - (f2**2))) * cp22)
+            
+            sat_pos = calcSatPos(rcvr_time, cp[0], nav, sv)
+            sat_pos = rot_satpos(sat_pos,cp)
+            
+            if count == 0:
+                H = np.vstack((H,sat_pos.T))    
+                p_arr = np.append(p_arr,cp,axis=0)
+            
+            else:
+                azimuth, elevation = calc_az_el(ecef2enu(np.array(init_x[:-1])[np.newaxis,:],sat_pos.T))
+                
+                if elevation < 5.:
+                    continue
+                else:
+                    H = np.vstack((H,sat_pos.T))    
+                    p_arr = np.append(p_arr,cp,axis=0)
+        
+        if len(H) < 4:
+            raise Exception("Less than 4 satellites in view")
+        else:
+            pass
+        
+        x = init_x
+        delta_xb = la.inv(G_mat(x,H).T @ G_mat(x,H)) @ G_mat(x,H).T @ (p_arr - est_p(x,H) + init_x[-1] - x[-1])
+        x = x + delta_xb.flatten()
+        
+        counter = 0
+        while ((np.abs(delta_xb) > 1e-8).all()) & (counter <= 100):
+            delta_xb = la.inv(G_mat(x,H).T @ G_mat(x,H)) @ G_mat(x,H).T @ (p_arr - est_p(x,H) + init_x[-1] - x[-1])
+            x = x + delta_xb.flatten()
+            counter += 1
+        
+        if (np.abs(x - init_x) > 1e-8).all():
+            init_x = x
+            
+        else:
+            init_x = x
+            break
+    
+    return init_x
+
 
 """
 for rcrv_time, group in sample:
@@ -121,6 +222,34 @@ for rcrv_time, group in sample:
     NL12 = cp1 + cp2 - (pr / l_12)
     print(f"NL12: {NL12.values}")
     time.sleep(1)
+
+#Wide Lane measurements 2
+N1_list, N2_list, NL12_list = [], [], []
+for rcrv_time, group in sample:
+    print(f"Epoch: {rcvr_time}")
+    
+    l_12 = c/((f1-f2) * 1e6)
+    group_sub = group[group['SV'] == 'G02']
+    cp1 = group_sub.L1C.values
+    cp2 = group_sub.L2W.values
+    pr = group_sub.C1C.values
+    
+    NL12 = cp1 - cp2 - (pr / l_12)
+    N1 = ((l2/l1)**-1) * ( (l2/l1)*NL12 - cp1 + (l2/l1)*cp2)
+    N2 = N1 - NL12
+    
+    cp11 = (cp1 - N1)*l1
+    cp21 = (cp2 - N2)*l2
+    print(f"N1: {N1}")
+    print(f"N2: {N2}")
+    print(f"NL12: {NL12}")
+    print(f"cp1: {cp11}\n")
+    
+    N1_list.append(N1[0])
+    N2_list.append(N2[0])
+    NL12_list.append(NL12[0])
+    time.sleep(1)
+
 """
 
 
@@ -129,30 +258,39 @@ f1 = 1575.42 #MHz
 f2 = 1227.6 #MHz
 f5 = 1176. #MHz
 
+l1 = c / (f1 * 1e6) ###L1 wavelength
+l2 = c / (f2 * 1e6) ###L2 wavelength
+l5 = c / (f5 * 1e6) ###L5 wavelength
+l_12 = c/((f1-f2) * 1e6) ###Wide Lane Combination wavelength
+
+
 # obs = gr.load(r'D:/Cholo/UP/5th Year - 1st Sem - BS Geodetic Engineering/GE 155.1/GNSS/Day 1/Molave/Molave/IGS000USA_R_20193020215_00M_01S_MO.rnx',use="G").to_dataframe().reset_index(drop=False)
 # nav = gr.load(r'D:/Cholo/UP/5th Year - 1st Sem - BS Geodetic Engineering/GE 155.1/GNSS/Day 1/Molave/Molave/IGS000USA_R_20193020215_00M_01S_MN.rnx',use="G")
 
 ###Molave
-obs = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/Molave/IGS000USA_R_20193020215_00M_01S_MO.rnx',use="G").to_dataframe().reset_index(drop=False)
-nav = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/Molave/IGS000USA_R_20193020215_00M_01S_MN.rnx',use="G")
+# obs = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/Molave/IGS000USA_R_20193020215_00M_01S_MO.rnx',use="G").to_dataframe().reset_index(drop=False)
+# nav = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/Molave/IGS000USA_R_20193020215_00M_01S_MN.rnx',use="G")
 
 ###Freshie Walk
 # obs = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/Freshie/IGS000USA_R_20193010216_24H_15S_MO.rnx',use="G").to_dataframe().reset_index(drop=False)
 # nav = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/Freshie/IGS000USA_R_20193010216_24H_15S_MN.rnx',use="G")
 
 ###CMC Hill
-# obs = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/CMC_Hill/IGS000USA_R_20193250055_00M_01S_MO.rnx',use="G").to_dataframe().reset_index(drop=False)
-# nav = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/CMC_Hill/IGS000USA_R_20193250055_00M_01S_MN.rnx',use="G")
+obs = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/CMC_Hill/IGS000USA_R_20193250055_00M_01S_MO.rnx',use="G").to_dataframe().reset_index(drop=False)
+nav = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/CMC_Hill/IGS000USA_R_20193250055_00M_01S_MN.rnx',use="G")
 
 ###PTAG IGS
 # obs = gr.load(r'C:/Users/ASTI/Desktop/GNSS/PTAG00PHL_R_20230180100_01H_30S_MO.crx',use="G").to_dataframe().reset_index(drop=False)
 # nav = gr.load(r'C:/Users/ASTI/Desktop/GNSS/PTAG00PHL_R_20230180000_01H_GN.rnx',use="G")
 
-iono_corr = nav.ionospheric_corr_GPS
+try:
+    iono_corr = nav.ionospheric_corr_GPS
+except:
+    pass
 nav = nav.to_dataframe().reset_index(drop=False)
 
 obs_columns = obs.columns.tolist()
-obs_columns[:2] = ['epoch','SV']
+obs_columns[:2] = ['SV','epoch']
 obs.columns = obs_columns
 
 days_epoch = (((obs.epoch - timedelta(hours=8)).values.astype(np.int64) // 10 ** 9) - datetime.timestamp(gps_date_start)) / (3600*24)
@@ -166,16 +304,19 @@ obs['time_week'] = time_week
 nav.columns = ['epoch','SV','af0','af1','af2','iode','crs','dn','m0','cuc','e','cus','sqrta','toe','cic','omg0',
                'cis','i0','crc','omega','odot','idot','CodesL2','GPSWeek','L2Pflag','SVacc','health','TGD','IODC','toc']
 nav = nav[['epoch','SV','toc','toe','af0','af1','af2','e','sqrta','dn','m0',
-                'omega','omg0','i0','odot','idot','cus','cuc','cis','cic','crs','crc','IODC']]
+                'omega','omg0','i0','odot','idot','cus','cuc','cis','cic','crs','crc','TGD','IODC']]
 
 ### Molave Ref
-ref = ell2cart(np.array([14.6575984,121.0673426,116.7935])).T
+# ref = ell2cart(np.array([14.6575984,121.0673426,116.7935])).T
 
 ### Freshie Walk Ref
 # ref = ell2cart(np.array([14.653947053,121.068636975,110.])).T
 
 ### CMC Hill Ref
-# ref = ell2cart(np.array([14.65530195,121.0638391,104.4737])).T
+ref = ell2cart(np.array([14.65530195,121.0638391,104.4737])).T
+
+### PTAG Ref
+# ref = np.array([-3184320.9618,5291067.5908,1590413.9800])[np.newaxis,:]
 
 #initial position estimate
 init_x = np.array([0,0,0,0])
@@ -188,7 +329,8 @@ sample = obs.groupby(time_week)
 pos_list, time_list, e_list, n_list, u_list, b_list = [], [], [], [], [], []
 
 for rcvr_time, group in sample:
-    init_x = calc_rcvr_pos(rcvr_time,group,init_x, count)
+    init_x = calc_rcvr_pos(rcvr_time,nav,group,init_x, count)
+    # init_x = calc_cp_pos(rcvr_time,nav,group,init_x, count)
     
     lat, lon, height = cart2ell(init_x[:-1]).flatten()
     print(f"Latitude: {lat}, Longitude: {lon}, Ellipsoidal Height: {height}")
