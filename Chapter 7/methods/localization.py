@@ -111,7 +111,7 @@ def est_p(init_x,G):
     return np.sqrt(np.sum(np.square(G - init_x[:-1]),axis=1)[:,np.newaxis])
 
 def rot_satpos(sat_pos,pseudorange):
-    omegadotE = 7292115.0e-11 # Earth's angular velocity
+    omegadotE = 7292115.1467e-11 # Earth's angular velocity
     
     pseudorange = pseudorange.flatten()[0]
     rot_mat = np.array([[np.cos(omegadotE * pseudorange/c), np.sin(omegadotE * pseudorange/c), 0],

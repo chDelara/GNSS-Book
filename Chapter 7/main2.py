@@ -27,26 +27,29 @@ def calc_rcvr_pos(rcvr_time,nav,group,x0,count):
         
         for sv in group.SV.unique():
             group_sub = group[group.SV == sv]
-            # pseudorange = (((f1**2) / ((f1**2) - (f2**2))) * group_sub.C1C) - (((f2**2) / ((f1**2) - (f2**2))) * group_sub.C2W)
+            p1 = group_sub.C1C.values
+            p2 = group_sub.C2W.values
+            pseudorange = (((f1**2) / ((f1**2) - (f2**2))) * p1) - (((f2**2) / ((f1**2) - (f2**2))) * p2)
+            p = pseudorange[np.newaxis,:] + (calcSatBias(rcvr_time,nav,sv)*c) - init_x[-1]
             
             ###pseudoranges
-            pseudorange1 = group_sub.C1C
-            p1 = pseudorange1.values[:,np.newaxis] + (calcSatBias(rcvr_time,nav,sv) - init_x[-1]/c)*c
+            # pseudorange1 = group_sub.C1C
+            # p1 = pseudorange1.values[:,np.newaxis] + (calcSatBias(rcvr_time,nav,sv) - init_x[-1]/c)*c
             
-            pseudorange2 = group_sub.C2W
-            p2 = pseudorange2.values[:,np.newaxis] + (calcSatBias(rcvr_time,nav,sv) - init_x[-1]/c)*c
+            # pseudorange2 = group_sub.C2W
+            # p2 = pseudorange2.values[:,np.newaxis] + (calcSatBias(rcvr_time,nav,sv) - init_x[-1]/c)*c
             
-            ###carrier phase measurements
-            carrier1 = group_sub.L1C
-            cp1 = carrier1.values[:,np.newaxis] * c/(f1*1e6) + (calcSatBias(rcvr_time,nav,sv) - init_x[-1]/c)*c
+            # ###carrier phase measurements
+            # carrier1 = group_sub.L1C
+            # cp1 = carrier1.values[:,np.newaxis] * c/(f1*1e6) + (calcSatBias(rcvr_time,nav,sv) - init_x[-1]/c)*c
             
-            carrier2 = group_sub.L2W
-            cp2 = carrier2.values[:,np.newaxis] * c/(f2*1e6) + (calcSatBias(rcvr_time,nav,sv) - init_x[-1]/c)*c
+            # carrier2 = group_sub.L2W
+            # cp2 = carrier2.values[:,np.newaxis] * c/(f2*1e6) + (calcSatBias(rcvr_time,nav,sv) - init_x[-1]/c)*c
             
-            f_arr = np.vstack([p1,p2,cp1,cp2])
+            # f_arr = np.vstack([p1,p2,cp1,cp2])
             
-            p, iono_delay, N1, N2 = dualF_eq(f_arr,f1,f2)
-            p = p[:,np.newaxis]
+            # p, iono_delay, N1, N2 = dualF_eq(f_arr,f1,f2)
+            # p = p[:,np.newaxis]
             
             sat_pos = calcSatPos(rcvr_time, p.flatten()[0], nav, sv)
             sat_pos = rot_satpos(sat_pos,p)
@@ -109,7 +112,7 @@ def dualF_eq(f_arr,f1,f2):
     return pIF
 
     
-def calc_cp_pos(rcvr_time,nav,group,x0,count):
+def calc_cp_pos(rcvr_time,nav,group,x0,N1_dict,N2_dict,N1_list,N2_list,count):
     init_x = x0
     
     print(f"Epoch: {rcvr_time}")
@@ -132,18 +135,36 @@ def calc_cp_pos(rcvr_time,nav,group,x0,count):
             carrier2 = group_sub.L2W
             cp2 = carrier2.values[:,np.newaxis]
             
-            NL12 = cp1 - cp2 - (p / l_12)
+            NL12 = cp1 - cp2 - (p_narrow / n_12)
             
-            N1 = np.around(((l2/l1)**-1) * ( (l2/l1)*NL12 - cp1 + (l2/l1)*cp2)).astype(int)
-            N2 = N1 - NL12
+            N1 = np.around((((l2/l1)-1)**-1) * ( ((l2/l1)*NL12) - cp1 + ((l2/l1)*cp2)) ).astype(int)
+            N2 = np.around(N1 - NL12).astype(int)
+            
+            N1_dict[sv] = N1[0]
+            N2_dict[sv] = N2[0]
+            
+            if count <= 600:
+                pass
+            else:
+                sv_index = list(N1_dict.keys()).index(sv)
+                # N1 = np.around(np.mean(N1_list,axis=0)).astype(int)[sv_index]
+                # N2 = np.around(np.mean(N2_list,axis=0)).astype(int)[sv_index]
+                N1 = np.mean(N1_list[-200:],axis=0)[sv_index]
+                N2 = np.mean(N2_list[-200:],axis=0)[sv_index]
             
             cp11 = (cp1 - N1)*l1 + (calcSatBias(rcvr_time,nav,sv)*c) - init_x[-1]
             cp22 = (cp2 - N2)*l2 + (calcSatBias(rcvr_time,nav,sv)*c) - init_x[-1]
             
-            cp = (((f1**2) / ((f1**2) - (f2**2))) * cp11) - (((f2**2) / ((f1**2) - (f2**2))) * cp22)
+            iono_l1 = ((f2**2)/(f1**2 - f2**2)) * ((cp11-(N1*l1)) - (cp22-(N2*l2))) ### ALready
             
-            sat_pos = calcSatPos(rcvr_time, cp[0], nav, sv)
-            sat_pos = rot_satpos(sat_pos,cp)
+            cp = cp11 - iono_l1
+            # cp = cp22 - ((f1**2/f2**2)*iono_l1)
+            
+            # cp = ((((f1**2) / ((f1**2) - (f2**2))) * cp11) - (((f2**2) / ((f1**2) - (f2**2))) * cp22)) - (N1 * l1)
+            
+            p = p + (calcSatBias(rcvr_time,nav,sv)*c) - init_x[-1] + iono_l1
+            sat_pos = calcSatPos(rcvr_time, p[0], nav, sv)
+            sat_pos = rot_satpos(sat_pos,p)
             
             if count == 0:
                 H = np.vstack((H,sat_pos.T))    
@@ -168,7 +189,7 @@ def calc_cp_pos(rcvr_time,nav,group,x0,count):
         x = x + delta_xb.flatten()
         
         counter = 0
-        while ((np.abs(delta_xb) > 1e-8).all()) & (counter <= 100):
+        while ((np.abs(delta_xb) > 1e-3).all()) & (counter <= 100):
             delta_xb = la.inv(G_mat(x,H).T @ G_mat(x,H)) @ G_mat(x,H).T @ (p_arr - est_p(x,H) + init_x[-1] - x[-1])
             x = x + delta_xb.flatten()
             counter += 1
@@ -262,22 +283,34 @@ l1 = c / (f1 * 1e6) ###L1 wavelength
 l2 = c / (f2 * 1e6) ###L2 wavelength
 l5 = c / (f5 * 1e6) ###L5 wavelength
 l_12 = c/((f1-f2) * 1e6) ###Wide Lane Combination wavelength
+n_12 = c/((f1+f2) * 1e6)
 
-
-# obs = gr.load(r'D:/Cholo/UP/5th Year - 1st Sem - BS Geodetic Engineering/GE 155.1/GNSS/Day 1/Molave/Molave/IGS000USA_R_20193020215_00M_01S_MO.rnx',use="G").to_dataframe().reset_index(drop=False)
-# nav = gr.load(r'D:/Cholo/UP/5th Year - 1st Sem - BS Geodetic Engineering/GE 155.1/GNSS/Day 1/Molave/Molave/IGS000USA_R_20193020215_00M_01S_MN.rnx',use="G")
 
 ###Molave
+# Laptop
 # obs = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/Molave/IGS000USA_R_20193020215_00M_01S_MO.rnx',use="G").to_dataframe().reset_index(drop=False)
 # nav = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/Molave/IGS000USA_R_20193020215_00M_01S_MN.rnx',use="G")
+
+# PC
+# obs = gr.load(r'D:/Cholo/UP/5th Year - 1st Sem - BS Geodetic Engineering/GE 155.1/GNSS/Day 1/Molave/Molave/IGS000USA_R_20193020215_00M_01S_MO.rnx',use="G").to_dataframe().reset_index(drop=False)
+# nav = gr.load(r'D:/Cholo/UP/5th Year - 1st Sem - BS Geodetic Engineering/GE 155.1/GNSS/Day 1/Molave/Molave/IGS000USA_R_20193020215_00M_01S_MN.rnx',use="G")
 
 ###Freshie Walk
 # obs = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/Freshie/IGS000USA_R_20193010216_24H_15S_MO.rnx',use="G").to_dataframe().reset_index(drop=False)
 # nav = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/Freshie/IGS000USA_R_20193010216_24H_15S_MN.rnx',use="G")
 
+# PC
+# obs = gr.load(r'D:/Cholo/UP/5th Year - 1st Sem - BS Geodetic Engineering/GE 155.1/GNSS/Day 4/Freshie_Walk_Day4/IGS000USA_R_20193240054_00M_01S_MO.rnx',use="G").to_dataframe().reset_index(drop=False)
+# nav = gr.load(r'D:/Cholo/UP/5th Year - 1st Sem - BS Geodetic Engineering/GE 155.1/GNSS/Day 4/Freshie_Walk_Day4/IGS000USA_R_20193240054_00M_01S_MN.rnx',use="G")
+
 ###CMC Hill
-obs = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/CMC_Hill/IGS000USA_R_20193250055_00M_01S_MO.rnx',use="G").to_dataframe().reset_index(drop=False)
-nav = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/CMC_Hill/IGS000USA_R_20193250055_00M_01S_MN.rnx',use="G")
+# Laptop
+# obs = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/CMC_Hill/IGS000USA_R_20193250055_00M_01S_MO.rnx',use="G").to_dataframe().reset_index(drop=False)
+# nav = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/CMC_Hill/IGS000USA_R_20193250055_00M_01S_MN.rnx',use="G")
+
+# PC
+obs = gr.load(r'D:/Cholo/UP/5th Year - 1st Sem - BS Geodetic Engineering/GE 155.1/GNSS/Day 4/CMC_Hill_Day4/IGS000USA_R_20193250055_00M_01S_MO.rnx',use="G").to_dataframe().reset_index(drop=False)
+nav = gr.load(r'D:/Cholo/UP/5th Year - 1st Sem - BS Geodetic Engineering/GE 155.1/GNSS/Day 4/CMC_Hill_Day4/IGS000USA_R_20193250055_00M_01S_MN.rnx',use="G")
 
 ###PTAG IGS
 # obs = gr.load(r'C:/Users/ASTI/Desktop/GNSS/PTAG00PHL_R_20230180100_01H_30S_MO.crx',use="G").to_dataframe().reset_index(drop=False)
@@ -328,9 +361,19 @@ sample = obs.groupby(time_week)
 
 pos_list, time_list, e_list, n_list, u_list, b_list = [], [], [], [], [], []
 
+sv_list = obs.SV.unique().tolist()
+n0_list = [0 for sv in sv_list]
+
+N1_dict, N2_dict = dict(map(lambda x,y: (x,y), sv_list,n0_list)), dict(map(lambda x,y: (x,y), sv_list,n0_list))
+N1_list, N2_list = np.zeros(shape=(1,len(sv_list))), np.zeros(shape=(1,len(sv_list)))
+
 for rcvr_time, group in sample:
-    init_x = calc_rcvr_pos(rcvr_time,nav,group,init_x, count)
-    # init_x = calc_cp_pos(rcvr_time,nav,group,init_x, count)
+    rcvr_time += init_x[-1]/c
+    # init_x = calc_rcvr_pos(rcvr_time,nav,group,init_x, count)
+    
+    init_x = calc_cp_pos(rcvr_time, nav, group, init_x, N1_dict, N2_dict,N1_list, N2_list, count)
+    N1_list = np.append(N1_list,np.array(list(N1_dict.values())).T,axis=0)
+    N2_list = np.append(N2_list,np.array(list(N2_dict.values())).T,axis=0)
     
     lat, lon, height = cart2ell(init_x[:-1]).flatten()
     print(f"Latitude: {lat}, Longitude: {lon}, Ellipsoidal Height: {height}")
@@ -351,12 +394,11 @@ for rcvr_time, group in sample:
 end = time.time()
 print(f"Runtime: {end-start} seconds")
 
-condition = np.where((np.abs(np.array(e_list)) < 10000) & (np.abs(np.array(n_list)) < 10000) & (np.abs(np.array(u_list)) < 10000))
-time_list2 = np.array(time_list)[condition]
-e_list2 = np.array(e_list)[condition]
-n_list2 = np.array(n_list)[condition]
-u_list2 = np.array(u_list)[condition]
-b_list2 = np.array(b_list)[condition]
+time_list2 = np.array(time_list)
+e_list2 = np.array(e_list)
+n_list2 = np.array(n_list)
+u_list2 = np.array(u_list)
+b_list2 = np.array(b_list)
 
 e_list2 = e_list2 - e_list2.mean()
 n_list2 = n_list2 - n_list2.mean()
