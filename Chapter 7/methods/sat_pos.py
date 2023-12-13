@@ -11,8 +11,10 @@ from scipy.constants import c
 
 def calcSatBias(rcvr_time,eph_df,SV):
     
+    t = rcvr_time
+    
     eph_n = eph_df[eph_df['SV'] == SV]
-    epoch_idx = abs(eph_n.toe - rcvr_time).idxmin()
+    epoch_idx = abs(eph_n.toe - t).idxmin()
     eph_n = eph_n.loc[epoch_idx:epoch_idx,:]
     
     ###coordinate calculation
@@ -23,7 +25,7 @@ def calcSatBias(rcvr_time,eph_df,SV):
     e = eph_n.e.values
     n0 = np.sqrt(GM/a**3) #computed mean motion (rad/sec)
     
-    tk = rcvr_time - eph_n.toe.values #time from ephemeris reference epoch
+    tk = t - eph_n.toe.values #time from ephemeris reference epoch
     
     if tk >= 302400:
         tk -= 604800
@@ -54,7 +56,7 @@ def calcSatBias(rcvr_time,eph_df,SV):
     af1 = eph_n.af1.values
     af2 = eph_n.af2.values
 
-    d_tsv = af0 + af1*(rcvr_time - toe) + (af2*(rcvr_time - toe)**2) + tr
+    d_tsv = af0 + (af1*(t - toe)) + (af2*(t - toe)**2) + tr
 
     return d_tsv
 
