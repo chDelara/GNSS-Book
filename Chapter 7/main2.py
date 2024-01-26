@@ -153,8 +153,11 @@ def calc_rcvr_pos2(rcvr_time,nav,group,x0,count,freq='single'):
             azimuth, elevation = calc_az_el(ecef2enu(np.array(init_x[:-1])[np.newaxis,:],sat_pos.T))
             iono_l1 = klobuchar(iono_corr, cart2ell(init_x[:-1]), azimuth, elevation, rcvr_time)*c
             
+            if freq == 'single':
+                p = p - iono_l1
             
-            # p = p - iono_l1
+            elif freq == 'dual':
+                pass
             
             if elevation < 15.:
                 continue
@@ -234,30 +237,42 @@ def calc_cp_pos(rcvr_time,nav,group,x0,N1_dict,N2_dict,N1_list,N2_list,count):
             N1 = (((l2/l1)-1)**-1) * ( ((l2/l1)*NL12) - cp1 + ((l2/l1)*cp2))
             N2 = N1 - NL12
             
-            N1_dict[sv] = N1[0][0]
-            N2_dict[sv] = N2[0][0]
-            
-            if count <= 600:
-                pass
+            if count == 0:
+                N1 = N1[0][0]
+                N2 = N2[0][0]
+                N1_dict[sv] = N1
+                N2_dict[sv] = N2
+                
+            elif (count <= 100) & ~(count == 0):
+                sv_index = list(N1_dict.keys()).index(sv)
+
+                N1 = np.around(np.mean(N1_list,axis=0)[sv_index])
+                N2 = np.around(np.mean(N2_list,axis=0)[sv_index])
+                N1_dict[sv] = N1
+                N2_dict[sv] = N2
+                
             else:
                 sv_index = list(N1_dict.keys()).index(sv)
                 # N1 = np.around(np.mean(N1_list,axis=0)).astype(int)[sv_index]
                 # N2 = np.around(np.mean(N2_list,axis=0)).astype(int)[sv_index]
-                N1 = np.mean(N1_list,axis=0)[sv_index]
-                N2 = np.mean(N2_list,axis=0)[sv_index]
+                N1 = np.around(np.mean(N1_list[:],axis=0)[sv_index])
+                N2 = np.around(np.mean(N2_list[:],axis=0)[sv_index])
+                N1_dict[sv] = N1
+                N2_dict[sv] = N2
+            
             
             p = p.flatten()[0]
-            cp11 = (cp1 - N1)*l1 + (calcSatBias(rcvr_time,p,nav,sv)*c) - init_x[-1]
-            cp22 = (cp2 - N2)*l2 + (calcSatBias(rcvr_time,p,nav,sv)*c) - init_x[-1]
+            cp11 = (cp1 - N1)*l1 + (calcSatBias(rcvr_time,nav,sv)*c) - init_x[-1]
+            cp22 = (cp2 - N2)*l2 + (calcSatBias(rcvr_time,nav,sv)*c) - init_x[-1]
             
             iono_l1 = ((f2**2)/(f1**2 - f2**2)) * ((cp11-(N1*l1)) - (cp22-(N2*l2))) ### ALready
             
-            cp = cp11
+            # cp = cp11 - iono_l1
             # cp = cp22 - ((f1**2/f2**2)*iono_l1)
             
-            # cp = ((((f1**2) / ((f1**2) - (f2**2))) * cp11) - (((f2**2) / ((f1**2) - (f2**2))) * cp22)) - (N1 * l1)
+            cp = ((((f1**2) / ((f1**2) - (f2**2))) * cp11) - (((f2**2) / ((f1**2) - (f2**2))) * cp22))
             
-            p = p + (calcSatBias(rcvr_time,p,nav,sv)*c) - init_x[-1] + iono_l1
+            p = p + (calcSatBias(rcvr_time,nav,sv)*c) - init_x[-1] - iono_l1
             sat_pos = calcSatPos(rcvr_time, p[0], nav, sv)
             sat_pos = rot_satpos(sat_pos,p)
             
@@ -383,8 +398,8 @@ n_12 = c/((f1+f2) * 1e6)
 
 ###Molave
 # Laptop
-# obs = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/Molave/IGS000USA_R_20193020215_00M_01S_MO.rnx',use="G").to_dataframe().reset_index(drop=False)
-# nav = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/Molave/IGS000USA_R_20193020215_00M_01S_MN.rnx',use="G")
+obs = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/Molave/IGS000USA_R_20193020215_00M_01S_MO.rnx',use="G").to_dataframe().reset_index(drop=False)
+nav = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/Molave/IGS000USA_R_20193020215_00M_01S_MN.rnx',use="G")
 
 # PC
 # obs = gr.load(r'D:/Cholo/UP/5th Year - 1st Sem - BS Geodetic Engineering/GE 155.1/GNSS/Day 1/Molave/Molave/IGS000USA_R_20193020215_00M_01S_MO.rnx',use="G").to_dataframe().reset_index(drop=False)
@@ -419,9 +434,17 @@ n_12 = c/((f1+f2) * 1e6)
 # obs = gr.load(r'C:/Users/ASTI/Desktop/SAGAP/Codes/GNSS/U-Center/sagap2023/gps/ASTI Rooftop/gps_20231128 17_23_20-20231128 17_50_20.obs',use="G").to_dataframe().reset_index(drop=False)
 # nav = gr.load(r'C:/Users/ASTI/Desktop/SAGAP/Codes/GNSS/U-Center/sagap2023/gps/ASTI Rooftop/gps_20231128 17_23_20-20231128 17_50_20.nav',use="G")
 
-### Davao
-obs = gr.load(r'C:/Users/ASTI/Desktop/SAGAP/Codes/GNSS/U-Center/sagap2023/gps/Davao/gps_20231207 14_18_57-20231207 14_42_23.obs',use="G").to_dataframe().reset_index(drop=False)
-nav = gr.load(r'C:/Users/ASTI/Desktop/SAGAP/Codes/GNSS/U-Center/sagap2023/gps/Davao/gps_20231207 14_18_57-20231207 14_42_23.nav',use="G")
+### Davao 1
+# obs = gr.load(r'C:/Users/ASTI/Desktop/SAGAP/Codes/GNSS/U-Center/sagap2023/gps/Davao/gps_20231207 14_18_57-20231207 14_42_23.obs',use="G").to_dataframe().reset_index(drop=False)
+# nav = gr.load(r'C:/Users/ASTI/Desktop/SAGAP/Codes/GNSS/U-Center/sagap2023/gps/Davao/gps_20231207 14_18_57-20231207 14_42_23.nav',use="G")
+
+### Davao 2
+# obs = gr.load(r'C:/Users/ASTI/Desktop/SAGAP/Codes/GNSS/U-Center/sagap2023/gps/Davao/gps_20231207 16_51_12-20231207 17_05_45.obs',use="G").to_dataframe().reset_index(drop=False)
+# nav = gr.load(r'C:/Users/ASTI/Desktop/SAGAP/Codes/GNSS/U-Center/sagap2023/gps/Davao/gps_20231207 16_51_12-20231207 17_05_45.nav',use="G")
+
+### Davao 3
+# obs = gr.load(r'C:/Users/ASTI/Desktop/SAGAP/Codes/GNSS/U-Center/sagap2023/gps/Davao/gps_20231210 08_57_08-20231210 09_16_37.obs',use="G").to_dataframe().reset_index(drop=False)
+# nav = gr.load(r'C:/Users/ASTI/Desktop/SAGAP/Codes/GNSS/U-Center/sagap2023/gps/Davao/gps_20231210 08_57_08-20231210 09_16_37.nav',use="G")
 
 ###PTAG IGS
 # obs = gr.load(r'C:/Users/ASTI/Desktop/GNSS/PTAG00PHL_R_20230180100_01H_30S_MO.crx',use="G").to_dataframe().reset_index(drop=False)
@@ -453,13 +476,13 @@ nav = nav[['epoch','SV','toc','toe','af0','af1','af2','e','sqrta','dn','m0',
                 'omega','omg0','i0','odot','idot','cus','cuc','cis','cic','crs','crc','TGD','IODC','SVacc']]
 
 ### Molave Ref
-# ref = ell2cart(np.array([14.6575984,121.0673426,116.7935])).T
+ref = ell2cart(np.array([14.6575984,121.0673426,116.7935])).T
 
 ### Freshie Walk Ref
 # ref = ell2cart(np.array([14.653947053,121.068636975,110.])).T
 
 ### CMC Hill Ref
-ref = ell2cart(np.array([14.65530195,121.0638391,104.4737])).T
+# ref = ell2cart(np.array([14.65530195,121.0638391,104.4737])).T
 
 ### PTAG Ref
 # ref = np.array([-3184320.9618,5291067.5908,1590413.9800])[np.newaxis,:]
@@ -481,18 +504,20 @@ N1_dict, N2_dict = dict(map(lambda x,y: (x,y), sv_list,n0_list)), dict(map(lambd
 N1_list, N2_list = np.zeros(shape=(1,len(sv_list))), np.zeros(shape=(1,len(sv_list)))
 
 for rcvr_time, group in sample:
+    rcvr_time = int(round(rcvr_time))
     # init_x = calc_cp_pos(rcvr_time, nav, group, init_x, N1_dict, N2_dict,N1_list, N2_list, count)
     # N1_list = np.append(N1_list,np.array([list(N1_dict.values())]),axis=0)
     # N2_list = np.append(N2_list,np.array([list(N2_dict.values())]),axis=0)
     
     try:
-        init_x, residuals = calc_rcvr_pos2(rcvr_time,nav,group,init_x,count,freq = 'single')
+        # init_x, residuals = calc_rcvr_pos2(rcvr_time,nav,group,init_x,count,freq = 'dual')
         
-        # init_x = calc_cp_pos(rcvr_time, nav, group, init_x, N1_dict, N2_dict,N1_list, N2_list, count)
-        # N1_list = np.append(N1_list,np.array([list(N1_dict.values())]),axis=0)
-        # N2_list = np.append(N2_list,np.array([list(N2_dict.values())]),axis=0)
+        init_x = calc_cp_pos(rcvr_time, nav, group, init_x, N1_dict, N2_dict,N1_list, N2_list, count)
+        N1_list = np.append(N1_list,np.array([list(N1_dict.values())]),axis=0)
+        N2_list = np.append(N2_list,np.array([list(N2_dict.values())]),axis=0)
         
-    except Exception:
+    except Exception as e:
+        print(e)
         continue
     
     lat, lon, height = cart2ell(init_x[:-1]).flatten()
@@ -524,6 +549,14 @@ e_list2 = e_list2 - e_list2.mean()
 n_list2 = n_list2 - n_list2.mean()
 u_list2 = u_list2 - u_list2.mean()
 b_list2 = b_list2 - b_list2.mean()
+
+### basic filtering
+condition = np.where((np.abs(e_list2) < 500) & (np.abs(n_list2) < 500) & (np.abs(u_list2) < 500))
+time_list2 = time_list2[condition]
+e_list2 = e_list2[condition]
+n_list2 = n_list2[condition]
+u_list2 = u_list2[condition]
+b_list2 = b_list2[condition]
 
 ###plot satellite position during GNSS measurement
 fig,ax = plt.subplots(figsize=(12,7),dpi=120)
