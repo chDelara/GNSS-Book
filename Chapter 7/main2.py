@@ -510,9 +510,9 @@ for rcvr_time, group in sample:
     # N2_list = np.append(N2_list,np.array([list(N2_dict.values())]),axis=0)
     
     try:
-        # init_x, residuals = calc_rcvr_pos2(rcvr_time,nav,group,init_x,count,freq = 'dual')
+        init_x, residuals = calc_rcvr_pos2(rcvr_time,nav,group,init_x,count,freq = 'dual')
         
-        init_x = calc_cp_pos(rcvr_time, nav, group, init_x, N1_dict, N2_dict,N1_list, N2_list, count)
+        # init_x = calc_cp_pos(rcvr_time, nav, group, init_x, N1_dict, N2_dict,N1_list, N2_list, count)
         N1_list = np.append(N1_list,np.array([list(N1_dict.values())]),axis=0)
         N2_list = np.append(N2_list,np.array([list(N2_dict.values())]),axis=0)
         

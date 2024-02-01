@@ -11,19 +11,21 @@ from scipy.constants import c
 
 def calcSatBias(rcvr_time,eph_df,SV):
     
+    t = rcvr_time
+    
     eph_n = eph_df[eph_df['SV'] == SV]
-    epoch_idx = abs(eph_n.toe - rcvr_time).idxmin()
+    epoch_idx = abs(eph_n.toe - t).idxmin()
     eph_n = eph_n.loc[epoch_idx:epoch_idx,:]
     
     ###coordinate calculation
     GM = 3986004.418e8 # Earth's gravitational constant
-    omegadotE = 7292115.0e-11 # Earth's angular velocity
+    omegadotE = 7292115.1467e-11 # Earth's angular velocity
     
     a = eph_n.sqrta.values**2 #semi-major axis
     e = eph_n.e.values
     n0 = np.sqrt(GM/a**3) #computed mean motion (rad/sec)
     
-    tk = rcvr_time - eph_n.toe.values #time from ephemeris reference epoch
+    tk = t - eph_n.toe.values #time from ephemeris reference epoch
     
     if tk >= 302400:
         tk -= 604800
@@ -49,12 +51,12 @@ def calcSatBias(rcvr_time,eph_df,SV):
     tr = F * e * np.sqrt(a) * np.sin(Ek)
 
     ###calculation of SV PRN code phase offset (satellite clock bias)
-    toc = eph_n.toc.values
+    toe = eph_n.toe.values
     af0 = eph_n.af0.values
     af1 = eph_n.af1.values
     af2 = eph_n.af2.values
 
-    d_tsv = af0 + af1*(rcvr_time - toc) + (af2*(rcvr_time-toc)**2) + tr
+    d_tsv = af0 + (af1*(t - toe)) + (af2*(t - toe)**2) + tr
 
     return d_tsv
 
@@ -63,12 +65,12 @@ def calcSatPos(rcvr_time,pseudorange,eph_df,SV):
     t =  rcvr_time - pseudorange/c
     
     eph_n = eph_df[eph_df['SV'] == SV]
-    epoch_idx = abs(eph_n.toe - rcvr_time).idxmin()
+    epoch_idx = abs(eph_n.toe - t).idxmin()
     eph_n = eph_n.loc[epoch_idx:epoch_idx,:]
     
     ###coordinate calculation
     GM = 3986004.418e8 # Earth's gravitational constant
-    omegadotE = 7292115.0e-11 # Earth's angular velocity
+    omegadotE = 7292115.1467e-11 # Earth's angular velocity
     
     a = eph_n.sqrta.values**2 #semi-major axis
     e = eph_n.e.values

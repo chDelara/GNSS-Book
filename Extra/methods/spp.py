@@ -200,11 +200,11 @@ def calc_rcvr_pos2(rcvr_time,nav,group,x0,count,freq='single',iono_corr=None):
     
     return x, residual
 
-def calc_rcvr_pos3(rcvr_time,nav,group,x0,R_std,Q_std,count,freq='single',iono_corr=None):
+def calc_rcvr_pos3(rcvr_time,nav,group,x0,P,R_std,Q_std,count,freq='single',iono_corr=None):
     print(f"Epoch: {rcvr_time}")
     
     init_x = x0
-    x,y,z,b = init_x[0], init_x[2], init_x[4], init_x[6]
+    x,y,z,b = init_x.flatten()[:4]
     
     H = np.empty((0,3))
     p_arr = np.empty((0,1))
@@ -263,8 +263,8 @@ def calc_rcvr_pos3(rcvr_time,nav,group,x0,R_std,Q_std,count,freq='single',iono_c
             azimuth, elevation = calc_az_el(ecef2enu(np.array([x,y,z])[np.newaxis,:],sat_pos.T))
             
             if freq == 'single':
-                iono_l1 = klobuchar(iono_corr, cart2ell([x,y,z]), azimuth, elevation, rcvr_time)*c
-                if iono_corr != None:
+                if iono_corr is not None:
+                    iono_l1 = klobuchar(iono_corr, cart2ell(np.array([x,y,z])), azimuth, elevation, rcvr_time)*c
                     p = p - iono_l1
                 else:
                     pass
@@ -283,21 +283,124 @@ def calc_rcvr_pos3(rcvr_time,nav,group,x0,R_std,Q_std,count,freq='single',iono_c
     else:
         pass
     
-    x_n = init_x.flatten()
-    xk, yk, zk, bk = x, y, z, b
     
+    x_n = init_x
     dt = 0.0 # GPS data frequency 1 data/second
     
-    kf = filter_pos(x_n[:,np.newaxis],p_arr,Q_std,R_std)
+    kf = filter_pos(x_n, P, p_arr, dt, Q_std, R_std)
+    b_prior = kf.x_prior.flatten()[3]
     
     for iteration in range(1):
-        kf.update(z=p_arr,HJacobian=Jacobian,Hx=Hx,args=H,hx_args=H)
         kf.predict()
-        xk, yk, zk, bk = kf.x[0],kf.x[2],kf.x[4],kf.x[6]
+        # z = p_arr + b_prior - kf.x.flatten()[3]
+        kf.update(z=p_arr,HJacobian=Jacobian,Hx=Hx,args=H,hx_args=H)
         
+        # eps = np.dot(np.dot(kf.y.T,np.linalg.inv(kf.S)),kf.y)
+        # print("eps: ",eps)
+        
+        # xk, yk, zk, bk = kf.x[0],kf.x[1],kf.x[2],kf.x[3]
         # print(cart2ell(np.array([xk,yk,zk])).T,bk)
         
-    return kf.x, kf.P
+    return kf.x, kf.P, kf.log_likelihood
+    # return kf
+
+def calc_rcvr_pos4(rcvr_time,nav,group,x0,P,R_std,count,freq='single',iono_corr=None):
+    print(f"Epoch: {rcvr_time}")
+    
+    init_x = x0
+    x0,y0,z0,b0 = init_x.flatten()[:4]
+    
+    try:
+        group = group.dropna(subset=['C1C','C2W','L1C','L2W'])
+    except KeyError:
+        group = group.dropna(subset=['C1C'])
+        
+    converge = False
+    while not converge:
+        H = np.empty((0,3))
+        p_arr = np.empty((0,1))
+        el_list = []
+        
+        for sv in group.SV.unique():
+            group_sub = group[group.SV == sv]
+            nav_n = nav[nav['SV'] == sv]
+            epoch_idx = abs(nav_n.toe - rcvr_time).idxmin()
+            TGD = nav_n.loc[epoch_idx:epoch_idx,:].TGD.values
+            
+            pseudorange = 0
+            
+            if freq == 'single':
+                pseudorange = group_sub.C1C.values
+                carrier = group_sub.L1C.values * l1
+                
+            elif freq == 'dual':
+                p1 = group_sub.C1C.values
+                p2 = group_sub.C2W.values
+                pseudorange = (((f1**2) / ((f1**2) - (f2**2))) * p1) - (((f2**2) / ((f1**2) - (f2**2))) * p2)
+            
+            p = pseudorange[np.newaxis,:] + ((calcSatBias(rcvr_time,nav,sv) - TGD)*c) - b0
+            
+            
+            sat_pos = calcSatPos(rcvr_time, p.flatten()[0], nav, sv)
+            sat_pos = rot_satpos(sat_pos,p)
+            
+            if count == 0:
+                H = np.vstack((H,sat_pos.T))  
+                p_arr = np.append(p_arr,p,axis=0)
+                
+            else:
+                azimuth, elevation = calc_az_el(ecef2enu(np.array([x0,y0,z0])[np.newaxis,:],sat_pos.T))
+                el_list.append(elevation)
+                
+                if freq == 'single':
+                    if iono_corr is not None:
+                        iono_l1 = klobuchar(iono_corr, cart2ell(np.array([x0,y0,z0])), azimuth, elevation, rcvr_time)*c
+                        p = p - iono_l1
+                    else:
+                        pass
+                
+                elif freq == 'dual':
+                    pass
+                
+                if elevation < 15.0:
+                    continue
+                else:
+                    H = np.vstack((H,sat_pos.T))    
+                    p_arr = np.append(p_arr,p,axis=0)
+        
+        if len(H) < 4:
+            raise Exception("Less than 4 satellites in view")
+        else:
+            pass
+        
+        ### Generate a covariance matrix
+        if np.isscalar(P):
+            P = np.eye(len(p_arr)) * P
+        else:
+            pass
+        
+        ### Generate a Measurement noise matrix
+        R = np.eye(len(p_arr)) * np.square(R_std)
+        
+        x_n = init_x
+        delta_x = np.ones_like(x_n)
+        
+        while ~np.all(np.abs(delta_x) < 1e-3):
+            # update step
+            residual = p_arr - est_p(x_n.flatten(),H) + b0 - x_n.flatten()[-1]
+            
+            J = Jacobian(x_n,H)
+            delta_x = np.dot( np.dot(la.inv(np.dot(J.T,J)), J.T), residual)
+            x_n += delta_x
+        
+        x0,y0,z0,b0 = x_n.flatten()
+        
+        if np.all(np.abs(delta_x) < 1e-6):
+            converge = True
+        else:
+            continue
+    
+    return x_n
 
 def est_pIF(prange_arr,f1,f2):
     

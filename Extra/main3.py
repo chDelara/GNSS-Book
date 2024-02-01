@@ -12,7 +12,7 @@ import numpy.linalg as la
 import matplotlib.pyplot as plt
 from scipy.constants import c
 from methods.localization import ell2cart, cart2ell, ecef2enu
-from methods.spp import calc_rcvr_pos3
+from methods.spp import calc_rcvr_pos3, calc_rcvr_pos4
 from datetime import datetime,timedelta
 import time
 
@@ -120,6 +120,7 @@ ref = ell2cart(np.array([14.6575984,121.0673426,116.7935])).T
 
 #initial position estimate
 init_x = np.zeros(shape=(8,1))
+P = 50
 
 start = time.time()
 count = 0
@@ -142,8 +143,11 @@ for rcvr_time, group in sample:
     
     try:
         # init_x, residuals = calc_rcvr_pos2(rcvr_time,nav,group,init_x,count,freq = 'dual')
-        init_x, P = calc_rcvr_pos3(rcvr_time, nav, group, init_x, 0.05, (1e-8)*c, count,freq='dual')
+        init_x, P, log_likelihood = calc_rcvr_pos3(rcvr_time,
+                                                    nav, group, init_x, P,
+                                                    10, (3e-8)*c, count,freq='dual')
         
+        # init_x = calc_rcvr_pos4(rcvr_time,nav,group,init_x,P,10.0,count,freq = 'dual')
         # init_x = calc_cp_pos3(rcvr_time, nav, group, init_x, N1_dict, N2_dict,N1_list, N2_list, count)
         # N1_list = np.append(N1_list,np.array([list(N1_dict.values())]),axis=0)
         # N2_list = np.append(N2_list,np.array([list(N2_dict.values())]),axis=0)
@@ -152,12 +156,13 @@ for rcvr_time, group in sample:
         print(e)
         continue
     
-    x, y, z, b = init_x.flatten()[0], init_x.flatten()[2], init_x.flatten()[4], init_x.flatten()[6]
+    x, y, z, b = init_x.flatten()[0], init_x.flatten()[1], init_x.flatten()[2], init_x.flatten()[3]
     lat, lon, height = cart2ell(np.array([[x,y,z]])).flatten()
     b = b/c
     
     print(f"Latitude: {lat}, Longitude: {lon}, Ellipsoidal Height: {height}")
-    print(f"Receiver Clock Bias: {b} s\n")
+    print(f"Receiver Clock Bias: {b} s")
+    print(f"Log-Likelihood: {log_likelihood} \n")
     
     e, n, u = ecef2enu(ref,np.array([[x,y,z]])).flatten()
     
@@ -169,6 +174,7 @@ for rcvr_time, group in sample:
     b_list.append(b)
     
     count += 1
+    # time.sleep(1)
 
 end = time.time()
 print(f"Runtime: {end-start} seconds")
@@ -179,13 +185,13 @@ n_list2 = np.array(n_list)
 u_list2 = np.array(u_list)
 b_list2 = np.array(b_list)
 
-e_list2 = e_list2 - e_list2.mean()
-n_list2 = n_list2 - n_list2.mean()
-u_list2 = u_list2 - u_list2.mean()
-b_list2 = b_list2 - b_list2.mean()
+e_list2 = e_list2 - np.median(e_list2)
+n_list2 = n_list2 - np.median(n_list2)
+u_list2 = u_list2 - np.median(u_list2)
+b_list2 = b_list2 - np.median(b_list2)
 
 ### basic filtering
-condition = np.where((np.abs(e_list2) < 500) & (np.abs(n_list2) < 500) & (np.abs(u_list2) < 500))
+condition = np.where((np.abs(e_list2) < 50) & (np.abs(n_list2) < 50) & (np.abs(u_list2) < 50))
 time_list2 = time_list2[condition]
 e_list2 = e_list2[condition]
 n_list2 = n_list2[condition]
@@ -217,20 +223,24 @@ ax.legend()
 fig,ax = plt.subplots(nrows=4,figsize=(12,18),dpi=120)
 ax[0].scatter(x=time_list2,y=e_list2,c = 'black',label = 'Easting')
 ax[0].set_title(f'Easting vs time, Mean: {e_list2.mean()} Standard Deviation: {e_list2.std()}')
+ax[0].grid()
 ax[0].legend()
 
 
 ax[1].scatter(x=time_list2,y=n_list2,c = 'red',label = 'Northing')
 ax[1].set_title(f'Northing vs time, Mean: {n_list2.mean()} Standard Deviation: {n_list2.std()}')
+ax[1].grid()
 ax[1].legend()
 
 
 ax[2].scatter(x=time_list2,y=u_list2,c = 'blue',label = 'Up')
 ax[2].set_title(f'Up vs time, Mean: {u_list2.mean()} Standard Deviation: {u_list2.std()}')
+ax[2].grid()
 ax[2].legend()
 
 
 ax[3].scatter(x=time_list2,y=b_list2,c = 'green',label = 'User Clock Bias')
 ax[3].set_title(f'Receiver Clock Bias vs time, Mean: {b_list2.mean()} Standard Deviation: {b_list2.std()}')
+ax[3].grid()
 ax[3].legend()
 plt.show()
