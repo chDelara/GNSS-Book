@@ -398,8 +398,8 @@ n_12 = c/((f1+f2) * 1e6)
 
 ###Molave
 # Laptop
-obs = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/Molave/IGS000USA_R_20193020215_00M_01S_MO.rnx',use="G").to_dataframe().reset_index(drop=False)
-nav = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/Molave/IGS000USA_R_20193020215_00M_01S_MN.rnx',use="G")
+# obs = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/Molave/IGS000USA_R_20193020215_00M_01S_MO.rnx',use="G").to_dataframe().reset_index(drop=False)
+# nav = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/Molave/IGS000USA_R_20193020215_00M_01S_MN.rnx',use="G")
 
 # PC
 # obs = gr.load(r'D:/Cholo/UP/5th Year - 1st Sem - BS Geodetic Engineering/GE 155.1/GNSS/Day 1/Molave/Molave/IGS000USA_R_20193020215_00M_01S_MO.rnx',use="G").to_dataframe().reset_index(drop=False)
@@ -413,10 +413,10 @@ nav = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/Molave/IGS000USA_R_2019302021
 # obs = gr.load(r'D:/Cholo/UP/5th Year - 1st Sem - BS Geodetic Engineering/GE 155.1/GNSS/Day 4/Freshie_Walk_Day4/IGS000USA_R_20193240054_00M_01S_MO.rnx',use="G").to_dataframe().reset_index(drop=False)
 # nav = gr.load(r'D:/Cholo/UP/5th Year - 1st Sem - BS Geodetic Engineering/GE 155.1/GNSS/Day 4/Freshie_Walk_Day4/IGS000USA_R_20193240054_00M_01S_MN.rnx',use="G")
 
-###CMC Hill
+### CMC Hill
 # Laptop
-# obs = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/CMC_Hill/IGS000USA_R_20193250055_00M_01S_MO.rnx',use="G").to_dataframe().reset_index(drop=False)
-# nav = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/CMC_Hill/IGS000USA_R_20193250055_00M_01S_MN.rnx',use="G")
+obs = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/CMC_Hill/IGS000USA_R_20193250055_00M_01S_MO.rnx',use="G").to_dataframe().reset_index(drop=False)
+nav = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/CMC_Hill/IGS000USA_R_20193250055_00M_01S_MN.rnx',use="G")
 
 # PC
 # obs = gr.load(r'D:/Cholo/UP/5th Year - 1st Sem - BS Geodetic Engineering/GE 155.1/GNSS/Day 4/CMC_Hill_Day4/IGS000USA_R_20193250055_00M_01S_MO.rnx',use="G").to_dataframe().reset_index(drop=False)
@@ -446,7 +446,7 @@ nav = gr.load(r'C:/Users/ASTI/Desktop/GNSS/UP data/Molave/IGS000USA_R_2019302021
 # obs = gr.load(r'C:/Users/ASTI/Desktop/SAGAP/Codes/GNSS/U-Center/sagap2023/gps/Davao/gps_20231210 08_57_08-20231210 09_16_37.obs',use="G").to_dataframe().reset_index(drop=False)
 # nav = gr.load(r'C:/Users/ASTI/Desktop/SAGAP/Codes/GNSS/U-Center/sagap2023/gps/Davao/gps_20231210 08_57_08-20231210 09_16_37.nav',use="G")
 
-###PTAG IGS
+### PTAG IGS
 # obs = gr.load(r'C:/Users/ASTI/Desktop/GNSS/PTAG00PHL_R_20230180100_01H_30S_MO.crx',use="G").to_dataframe().reset_index(drop=False)
 # nav = gr.load(r'C:/Users/ASTI/Desktop/GNSS/PTAG00PHL_R_20230180000_01H_GN.rnx',use="G")
 
@@ -476,13 +476,13 @@ nav = nav[['epoch','SV','toc','toe','af0','af1','af2','e','sqrta','dn','m0',
                 'omega','omg0','i0','odot','idot','cus','cuc','cis','cic','crs','crc','TGD','IODC','SVacc']]
 
 ### Molave Ref
-ref = ell2cart(np.array([14.6575984,121.0673426,116.7935])).T
+# ref = ell2cart(np.array([14.6575984,121.0673426,116.7935])).T
 
 ### Freshie Walk Ref
 # ref = ell2cart(np.array([14.653947053,121.068636975,110.])).T
 
 ### CMC Hill Ref
-# ref = ell2cart(np.array([14.65530195,121.0638391,104.4737])).T
+ref = ell2cart(np.array([14.65530195,121.0638391,104.4737])).T
 
 ### PTAG Ref
 # ref = np.array([-3184320.9618,5291067.5908,1590413.9800])[np.newaxis,:]
@@ -504,15 +504,15 @@ N1_dict, N2_dict = dict(map(lambda x,y: (x,y), sv_list,n0_list)), dict(map(lambd
 N1_list, N2_list = np.zeros(shape=(1,len(sv_list))), np.zeros(shape=(1,len(sv_list)))
 
 for rcvr_time, group in sample:
-    rcvr_time = int(round(rcvr_time))
+    rcvr_time = rcvr_time
     # init_x = calc_cp_pos(rcvr_time, nav, group, init_x, N1_dict, N2_dict,N1_list, N2_list, count)
     # N1_list = np.append(N1_list,np.array([list(N1_dict.values())]),axis=0)
     # N2_list = np.append(N2_list,np.array([list(N2_dict.values())]),axis=0)
     
     try:
-        init_x, residuals = calc_rcvr_pos2(rcvr_time,nav,group,init_x,count,freq = 'dual')
+        # init_x, residuals = calc_rcvr_pos2(rcvr_time,nav,group,init_x,count,freq = 'single')
         
-        # init_x = calc_cp_pos(rcvr_time, nav, group, init_x, N1_dict, N2_dict,N1_list, N2_list, count)
+        init_x = calc_cp_pos(rcvr_time, nav, group, init_x, N1_dict, N2_dict,N1_list, N2_list, count)
         N1_list = np.append(N1_list,np.array([list(N1_dict.values())]),axis=0)
         N2_list = np.append(N2_list,np.array([list(N2_dict.values())]),axis=0)
         

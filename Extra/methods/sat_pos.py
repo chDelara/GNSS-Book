@@ -8,6 +8,7 @@ Created on Tue Oct 17 23:13:29 2023
 import numpy as np
 import pandas as pd
 from scipy.constants import c
+from scipy.interpolate import lagrange
 
 def calcSatBias(rcvr_time,eph_df,SV):
     
@@ -132,3 +133,35 @@ def calcSatPos(rcvr_time,pseudorange,eph_df,SV):
     zk = yk_prime*np.sin(ik)
     
     return np.array([xk,yk,zk])
+
+def precise_orbit(epoch, pseudorange, sv, sp3):
+    
+    ### set-up x,y,z, and epoch values for interpolation
+    sp3_sub = sp3[sp3.SV == sv]
+    
+    t = (sp3_sub.epoch.values.astype(np.datetime64) - np.datetime64('1970-01-01T00:00:00Z')) / np.timedelta64(1,'s')
+    ep = pd.Timestamp(epoch).timestamp() - (pseudorange/c) - t[0]
+    t -= t[0]
+    
+    idx = np.argmin(abs(t - ep))
+    
+    x = sp3_sub.x.values.astype(float)
+    y = sp3_sub.y.values.astype(float)
+    z = sp3_sub.z.values.astype(float)
+    
+    ###Langrange Interpolation
+    polyx = lagrange(t[idx-2:idx+2],x[idx-2:idx+2])
+    polyy = lagrange(t[idx-2:idx+2],y[idx-2:idx+2])
+    polyz = lagrange(t[idx-2:idx+2],z[idx-2:idx+2])
+    
+    x_interp = polyx(ep) * 1000
+    y_interp = polyy(ep) * 1000
+    z_interp = polyz(ep) * 1000
+    
+    
+    # x_interp = np.interp(pd.Timestamp(epoch).timestamp() - pseudorange/c,t,x.astype(float)) * 1000
+    # y_interp = np.interp(pd.Timestamp(epoch).timestamp() - pseudorange/c,t,y.astype(float)) * 1000
+    # z_interp = np.interp(pd.Timestamp(epoch).timestamp() - pseudorange/c,t,z.astype(float)) * 1000
+    return np.vstack([x_interp,
+                      y_interp,
+                      z_interp])

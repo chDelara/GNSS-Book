@@ -7,9 +7,12 @@ Created on Tue Jan 16 09:30:59 2024
 
 import numpy as np
 import numpy.linalg as la
-from .sat_pos import calcSatBias, calcSatPos
-from .localization import ecef2enu, cart2ell, calc_az_el, rot_satpos, G_mat, est_p, klobuchar
-from .EKF import filter_pos, Jacobian, Hx
+import pandas as pd
+from .sat_pos import calcSatBias, calcSatPos, precise_orbit
+from .localization import ecef2enu, cart2ell, calc_az_el, rot_satpos, G_mat, est_p
+from .iono_est import klobuchar
+from .tropo_est import saastamoinen
+from .EKF import filter_pos, filter_pos2, Jacobian, Jacobian_PPP, Hx, Hx_PPP
 from scipy.constants import c
 from scipy.linalg import block_diag
 from filterpy.common import Q_discrete_white_noise
@@ -22,8 +25,13 @@ f5 = 1176. #MHz
 l1 = c / (f1 * 1e6) ###L1 wavelength
 l2 = c / (f2 * 1e6) ###L2 wavelength
 l5 = c / (f5 * 1e6) ###L5 wavelength
+
+l_if = l1*l2/((77*l2) - (60*l1)) ###Ionospheric-free Combination wavelength
 l_12 = c/((f1-f2) * 1e6) ###Wide Lane Combination wavelength
-n_12 = c/((f1+f2) * 1e6)
+fl_12 = f1-f2
+
+n_12 = c/((f1+f2) * 1e6) ###Narrow Lane Combination wavelength
+fn_12 = f1+f2
 
 def calc_rcvr_pos(rcvr_time,nav,group,x0,count):
     init_x = x0
@@ -217,11 +225,14 @@ def calc_rcvr_pos3(rcvr_time,nav,group,x0,P,R_std,Q_std,count,freq='single',iono
     for sv in group.SV.unique():
         group_sub = group[group.SV == sv]
         nav_n = nav[nav['SV'] == sv]
-        epoch_idx = abs(nav_n.toe - rcvr_time).idxmin()
+        try:
+            epoch_idx = abs(nav_n.toe - rcvr_time).idxmin()
+        except ValueError:
+            continue
         TGD = nav_n.loc[epoch_idx:epoch_idx,:].TGD.values
         
-        pseudorange = 0
         
+        pseudorange = 0
         if freq == 'single':
             pseudorange = group_sub.C1C.values
             carrier = group_sub.L1C.values * l1
@@ -275,8 +286,10 @@ def calc_rcvr_pos3(rcvr_time,nav,group,x0,P,R_std,Q_std,count,freq='single',iono
             if elevation < 15.:
                 continue
             else:
+                height = cart2ell(np.array([[x,y,z]])).flatten()[-1]
+                Tr = saastamoinen(height,elevation[0])
                 H = np.vstack((H,sat_pos.T))    
-                p_arr = np.append(p_arr,p,axis=0)
+                p_arr = np.append(p_arr,p - Tr,axis=0)
     
     if len(H) < 4:
         raise Exception("Less than 4 satellites in view")
@@ -288,11 +301,11 @@ def calc_rcvr_pos3(rcvr_time,nav,group,x0,P,R_std,Q_std,count,freq='single',iono
     dt = 0.0 # GPS data frequency 1 data/second
     
     kf = filter_pos(x_n, P, p_arr, dt, Q_std, R_std)
-    b_prior = kf.x_prior.flatten()[3]
     
-    for iteration in range(1):
+    num_iter = 1
+    
+    for iteration in range(num_iter):
         kf.predict()
-        # z = p_arr + b_prior - kf.x.flatten()[3]
         kf.update(z=p_arr,HJacobian=Jacobian,Hx=Hx,args=H,hx_args=H)
         
         # eps = np.dot(np.dot(kf.y.T,np.linalg.inv(kf.S)),kf.y)
@@ -526,3 +539,254 @@ def calc_cp_pos(rcvr_time,nav,group,x0,N1_dict,N2_dict,N1_list,N2_list,count):
             break
     
     return init_x
+
+def calc_cp_pos2(rcvr_time, nav, sp3, group, x0, P, R_std, Q_std, N1_dict, count):
+    
+    init_x = x0
+    x,y,z,b = init_x.flatten()[:4]
+    
+    print(f"Epoch: {rcvr_time}")
+    
+    ### initialize matrices to store satellite positions, pseudorange
+    ### and carrier phase measurements
+    H = np.empty((0,3))
+    p_arr = np.zeros((32,1))
+    cp_arr = np.zeros((32,1))
+    elev_arr = np.zeros((32,1))
+    
+    ### drop records with nan C1C, C2W, L1C, and L2W values 
+    group = group.dropna(subset=['C1C','C2W','L1C','L2W'])
+    
+    ### store the order of the SV numbers
+    sv_arr = []
+    
+    for sv in group.SV.unique():
+        ### convert SV number into python index for arrangement of y (measurement) and G/J matrix
+        sv_num = int(sv[1:]) - 1
+        
+        group_sub = group[group.SV == sv]
+        
+        ### satellite clock bias
+        sat_bias = calcSatBias(rcvr_time,nav,sv)*c
+        
+        ### Pseudorange measurements
+        pseudorange_l1 = group_sub.C1C
+        pseudorange_l2 = group_sub.C2W
+        p1 = pseudorange_l1.values[:,np.newaxis] + sat_bias - b
+        p2 = pseudorange_l2.values[:,np.newaxis] + sat_bias - b
+        
+        ### Carrier Phases Measurements
+        carrier_l1 = group_sub.L1C
+        carrier_l2 = group_sub.L2W
+        cp1 = (carrier_l1.values[:,np.newaxis] * l1) + sat_bias - b
+        cp2 = (carrier_l2.values[:,np.newaxis] * l2) + sat_bias - b
+        
+        ### ionospheric-free Pseudorange and Carrier-phase measurements
+        p_if = (((f1**2) / ((f1**2) - (f2**2))) * p1) - (((f2**2) / ((f1**2) - (f2**2))) * p2)
+        cp_if = ((((f1**2) / ((f1**2) - (f2**2))) * cp1) - (((f2**2) / ((f1**2) - (f2**2))) * cp2))
+        
+        ### Wide-lane integer ambiguity
+        # NL12 = (cp1 - cp2 - (p1 / l_12)).flatten()[0]
+        # N1 = (((l2/l1)-1)**-1) * ( ((l2/l1)*NL12) - cp1 + ((l2/l1)*cp2))
+        # N2 = N1 - NL12
+        # N_if = N1 - ((60/77) * N2)
+        
+        ### ionospheric-free Pseudorange and Carrier-phase measurements
+        # N_if = N1_dict[sv_num][0]
+        # p_if = p_if + (calcSatBias(rcvr_time,nav,sv)*c) - b
+        # cp_if = cp_if + (calcSatBias(rcvr_time,nav,sv)*c) - b
+        
+        if not isinstance(sp3, pd.DataFrame):
+            sat_pos = calcSatPos(rcvr_time, p_if.flatten()[0], nav, sv)
+            sat_pos = rot_satpos(sat_pos,p_if)
+
+        else:
+            sat_pos = precise_orbit(group_sub.epoch.values[0], p_if, sv, sp3)
+            sat_pos = rot_satpos(sat_pos,p_if)
+        
+        if count == 0:
+            H = np.vstack((H,sat_pos.T))
+            p_arr[sv_num] = p_if
+            cp_arr[sv_num] = cp_if
+            sv_arr.append(sv_num)
+        
+        else:
+            azimuth, elevation = calc_az_el(ecef2enu(np.array([x,y,z])[np.newaxis,:],sat_pos.T))
+            
+            if elevation < 15.:
+                continue
+            
+            else:
+                H = np.vstack((H,sat_pos.T))    
+                p_arr[sv_num] = p_if
+                cp_arr[sv_num] = cp_if
+                elev_arr[sv_num] = 0.003 + (0.003/np.sin(np.radians(elevation[0])))
+                sv_arr.append(sv_num)
+    
+    if len(H) < 4:
+        raise Exception("Less than 4 satellites in view")
+    else:
+        pass
+        
+    x_n = init_x
+    dt = 0.0 # GPS data frequency 1 data/second
+    y_arr = np.vstack([p_arr,cp_arr])
+    elev_arr = np.vstack([elev_arr,elev_arr])
+    pos_list = np.where(p_arr != 0)[0].tolist()
+    
+    if count == 0:
+        pass
+    else:
+        R_empt_std = R_std
+        R_std = elev_arr
+        R_std = np.where(R_std == 0, np.square(R_empt_std), np.square(R_std))
+    
+    kf = filter_pos2(x_n, P, y_arr, dt, Q_std, R_std)
+    
+    for iteration in range(1):
+        kf.predict()
+        kf.update(z=y_arr,HJacobian=Jacobian_PPP,Hx=Hx_PPP,args=(H,pos_list),hx_args=(H,pos_list))
+        
+    
+    sv_list = np.where(kf.x[8:] != 0)[0].tolist()
+    
+    for sv in sv_list:
+        # if N1_dict[sv][1] - kf.x[8+sv][0] > 5:
+        N1_dict[sv][0] = rcvr_time
+        N1_dict[sv][1] = kf.x[8+sv][0]/l_if
+            
+    
+    return kf.x, kf.P, kf.log_likelihood, kf.y
+
+def calc_cp_pos3(rcvr_time, nav, sp3, group, x0, P, R_std, Q_std, N1_dict, count):
+    
+    init_x = x0
+    x,y,z,b = init_x.flatten()[:4]
+    
+    print(f"Epoch: {rcvr_time}")
+    
+    ### initialize matrices to store satellite positions, pseudorange
+    ### and carrier phase measurements
+    H = np.empty((0,3))
+    p_arr = np.zeros((32,1))
+    cp_arr = np.zeros((32,1))
+    elev_arr = np.zeros((64,1))
+    
+    ### drop records with nan C1C, C2W, L1C, and L2W values 
+    group = group.dropna(subset=['C1C','C2W','L1C','L2W'])
+    
+    ### store the order of the SV numbers
+    sv_arr = []
+    
+    for sv in group.SV.unique():
+        ### convert SV number into python index for arrangement of y (measurement) and G/J matrix
+        sv_num = int(sv[1:]) - 1
+        
+        group_sub = group[group.SV == sv]
+        
+        ### satellite clock bias
+        sat_bias = calcSatBias(rcvr_time,nav,sv)*c
+        
+        ### Pseudorange measurements
+        pseudorange_l1 = group_sub.C1C
+        pseudorange_l2 = group_sub.C2W
+        p1 = pseudorange_l1.values[:,np.newaxis] + sat_bias - b
+        p2 = pseudorange_l2.values[:,np.newaxis] + sat_bias - b
+        
+        ### Carrier Phases Measurements
+        carrier_l1 = group_sub.L1C
+        carrier_l2 = group_sub.L2W
+        cp1 = (carrier_l1.values[:,np.newaxis] * l1) + sat_bias - b
+        cp2 = (carrier_l2.values[:,np.newaxis] * l2) + sat_bias - b
+        
+        ### ionospheric-free Pseudorange and Carrier-phase measurements
+        p_if = (((f1**2) / ((f1**2) - (f2**2))) * p1) - (((f2**2) / ((f1**2) - (f2**2))) * p2)
+        cp_if = ((((f1**2) / ((f1**2) - (f2**2))) * cp1) - (((f2**2) / ((f1**2) - (f2**2))) * cp2))
+        
+        ## Wide-lane integer ambiguity
+        WL_12 = (cp1/l1 - cp2/l2 - (p1 / l_12)).flatten()[0]
+        NW_1 = (((l2/l1)-1)**-1) * ( ((l2/l1)*WL_12) - cp1/l1 + ((l2/l1)*cp2/l2))
+        NW_2 = NW_1 - WL_12
+        
+        ## Narrow-lane integer ambiguity
+        NL_12 = (cp1/l1 + cp2/l2 - (p1 / n_12)).flatten()[0]
+        NN_1 = (((l2/l1)-1)**-1) * ( ((l2/l1)*NL_12) - cp1/l1 + ((l2/l1)*cp2/l2))
+        NN_2 = NN_1 - NL_12
+        
+        # N = n_12 * (NN_1 + ((l_12/l2) * WL_12))
+        N = ( (f1*NL_12)/(f1+f2) ) + ( (f1*f2*WL_12)/(f1**2 - f2**2) )
+        cp_if = cp_if - (N * l_if)
+        
+        # ## ionospheric-free Pseudorange and Carrier-phase measurements
+        # N_if = N1_dict[sv_num][0]
+        # p_if = p_if + (calcSatBias(rcvr_time,nav,sv)*c) - b
+        # cp_if = cp_if + (calcSatBias(rcvr_time,nav,sv)*c) - b
+        
+        if not isinstance(sp3, pd.DataFrame):
+            sat_pos = calcSatPos(rcvr_time, p_if.flatten()[0], nav, sv)
+            sat_pos = rot_satpos(sat_pos,p_if)
+
+        else:
+            sat_pos = precise_orbit(group_sub.epoch.values[0], p_if, sv, sp3)
+            sat_pos = rot_satpos(sat_pos,p_if)
+        
+        if count == 0:
+            H = np.vstack((H,sat_pos.T))
+            p_arr[sv_num] = p_if
+            cp_arr[sv_num] = cp_if
+            sv_arr.append(sv_num)
+        
+        else:
+            azimuth, elevation = calc_az_el(ecef2enu(np.array([x,y,z])[np.newaxis,:],sat_pos.T))
+            
+            if elevation < 15.:
+                continue
+            
+            else:
+                height = cart2ell(np.array([[x,y,z]])).flatten()[-1]
+                Tr = saastamoinen(height,elevation[0])
+                H = np.vstack((H,sat_pos.T))    
+                p_arr[sv_num] = p_if - Tr
+                cp_arr[sv_num] = cp_if - Tr
+                elev_arr[sv_num] = 0.6 + (0.6/np.sin(np.radians(elevation[0])))
+                elev_arr[sv_num+32] = 0.003 + (0.003/np.sin(np.radians(elevation[0])))
+                sv_arr.append(sv_num)
+    
+    if len(H) < 4:
+        raise Exception("Less than 4 satellites in view")
+    else:
+        pass
+        
+    x_n = init_x
+    dt = 0.0 # GPS data frequency 1 data/second
+    y_arr = np.vstack([p_arr,cp_arr])
+    # elev_arr = np.vstack([elev_arr,elev_arr])
+    pos_list = np.where(p_arr != 0)[0].tolist()
+    
+    if count == 0:
+        pass
+    
+    else:
+        R_empt_std = R_std
+        
+        R_std = elev_arr
+        R_std[:32] += R_empt_std ### pseudorange precision
+        R_std[32:] += 0.01*l1 ### carrier-phase precision
+        R_std = np.where(R_std == 0, np.square(R_empt_std), np.square(R_std))
+    
+    kf = filter_pos2(x_n, P, y_arr, dt, Q_std, R_std)
+    
+    for iteration in range(1):
+        kf.predict()
+        kf.update(z=y_arr,HJacobian=Jacobian_PPP,Hx=Hx_PPP,args=(H,pos_list),hx_args=(H,pos_list))
+        
+    
+    sv_list = np.where(kf.x[8:] != 0)[0].tolist()
+    
+    for sv in sv_list:
+        # if N1_dict[sv][1] - kf.x[8+sv][0] > 5:
+        N1_dict[sv][0] = rcvr_time
+        N1_dict[sv][1] = kf.x[8+sv][0]/l_if
+            
+    
+    return kf.x, kf.P, kf.log_likelihood, kf.y
